@@ -57,9 +57,11 @@ async fn main() -> Result<()> {
             parameter,
         } => {
             let mut args = ToolArgs::new(tool);
-            for (i, param) in parameter.iter().enumerate() {
-                let key = format!("param{}", i);
-                args = args.with_parameter(key, param.parse()?);
+            for param in parameter {
+                let parts: Vec<&str> = param.splitn(2, '=').collect();
+                if parts.len() == 2 {
+                    args = args.with_parameter(parts[0], serde_json::json!(parts[1]));
+                }
             }
             if let Some(dir) = working_dir {
                 args = args.with_working_dir(dir);
