@@ -1,5 +1,5 @@
 //! Complete tool implementations for SkyFly Core
-//! These are fully functional implementations of the core tools
+//! These are fully functional implementations of core tools
 
 use crate::tools::types::{Tool, ToolArgs, ToolResult, ToolMetadata, ParameterDef};
 use anyhow::Result;
@@ -41,44 +41,68 @@ impl Tool for BashTool {
 
         tracing::info!("Executing bash command: {}", command);
 
-        // Build command
-        let mut cmd = tokio::process::Command::new("sh");
-        cmd.arg("-c").arg(&command);
-        
+        // Spawn process
+        let mut child = tokio::process::Command::new("sh")
+            .arg("-c")
+            .arg(&command);
+
         if let Some(dir) = working_dir {
-            cmd.current_dir(dir);
+            child = child.current_dir(dir);
         }
 
-        // Execute with timeout
-        let output = tokio::time::timeout(
+        let mut child = child.spawn()?;
+
+        // Wait for result with timeout
+        let result = tokio::time::timeout(
             tokio::time::Duration::from_secs(timeout_secs),
-            cmd.output()
+            child.wait()
         ).await;
 
         let elapsed = start.elapsed().as_millis() as u64;
 
-        match output {
-            Ok(Ok(output)) => {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                let success = output.status.success();
+        match result {
+            Ok(Ok(status)) => {
+                let stdout = child.stdout.take();
+                let stderr = child.stderr.take();
+
+                // Read stdout if available
+                let stdout_output = if let Some(mut stdout) = stdout {
+                    use tokio::io::AsyncReadExt;
+                    let mut buf = Vec::new();
+                    let _ = stdout.read_to_end(&mut buf).await;
+                    String::from_utf8_lossy(&buf).to_string()
+                } else {
+                    String::new()
+                };
+
+                // Read stderr if available
+                let stderr_output = if let Some(mut stderr) = stderr {
+                    use tokio::io::AsyncReadExt;
+                    let mut buf = Vec::new();
+                    let _ = stderr.read_to_end(&mut buf).await;
+                    String::from_utf8_lossy(&buf).to_string()
+                } else {
+                    String::new()
+                };
+
+                let success = status.success();
 
                 tracing::info!(
                     "Command completed in {}ms with exit code: {:?}",
                     elapsed,
-                    output.status.code()
+                    status.code()
                 );
 
                 let result_output = if success {
-                    stdout.to_string()
+                    stdout_output
                 } else {
-                    format!("Exit code: {:?}\nStderr: {}", output.status.code(), stderr)
+                    format!("Exit code: {:?}\nStderr: {}", status.code(), stderr_output)
                 };
 
                 Ok(ToolResult {
                     success,
                     output: result_output,
-                    error: if success { None } else { Some(stderr.to_string()) },
+                    error: if success { None } else { Some(stderr_output) },
                     metadata: ToolMetadata {
                         execution_time_ms: elapsed,
                         tool_name: self.name().to_string(),
@@ -87,7 +111,7 @@ impl Tool for BashTool {
                 })
             }
             Ok(Err(e)) => {
-                anyhow::bail!("Failed to execute command: {}", e)
+                anyhow::bail!("Command failed: {}", e)
             }
             Err(_) => {
                 anyhow::bail!("Command timed out after {} seconds", timeout_secs)
@@ -116,7 +140,7 @@ impl Tool for ReadTool {
 
     fn parameters(&self) -> Vec<ParameterDef> {
         vec![
-            ParameterDef::new("path", "string", "Path to the file to read"),
+            ParameterDef::new("path", "string", "Path to file to read"),
         ]
     }
 
@@ -158,12 +182,11 @@ impl Tool for ReadTool {
             Ok(content) => {
                 let elapsed = start.elapsed().as_millis() as u64;
                 let lines = content.lines().count();
-                let bytes = content.len();
                 
                 tracing::info!(
                     "File read successfully: {} lines, {} bytes",
                     lines,
-                    bytes
+                    content.len()
                 );
 
                 Ok(ToolResult {
@@ -176,7 +199,7 @@ impl Tool for ReadTool {
                         parameters: serde_json::json!({
                             "path": path_str,
                             "lines": lines,
-                            "bytes": bytes
+                            "bytes": content.len()
                         }),
                     },
                 })
@@ -217,7 +240,7 @@ impl Tool for WriteTool {
 
     fn parameters(&self) -> Vec<ParameterDef> {
         vec![
-            ParameterDef::new("path", "string", "Path to the file to write"),
+            ParameterDef::new("path", "string", "Path to file to write"),
             ParameterDef::new("content", "string", "Content to write"),
             ParameterDef::optional("backup", "boolean", "Create backup before writing (default: true)"),
         ]
@@ -282,22 +305,23 @@ impl Tool for WriteTool {
         match fs::write(&path, content.as_bytes()).await {
             Ok(_) => {
                 let elapsed = start.elapsed().as_millis() as u64;
+                let bytes = content.len();
                 
                 tracing::info!(
                     "File written successfully: {} bytes",
-                    content.len()
+                    bytes
                 );
 
                 Ok(ToolResult {
                     success: true,
-                    output: format!("Successfully wrote {} bytes to {}", content.len(), path_str),
+                    output: format!("Successfully wrote {} bytes to {}", bytes, path_str),
                     error: None,
                     metadata: ToolMetadata {
                         execution_time_ms: elapsed,
                         tool_name: self.name().to_string(),
                         parameters: serde_json::json!({
                             "path": path_str,
-                            "bytes": content.len()
+                            "bytes": bytes
                         }),
                     },
                 })
@@ -333,12 +357,12 @@ impl Tool for EditTool {
     }
 
     fn description(&self) -> &str {
-        "Edit file contents with line-based operations"
+        "Edit file contents with string replacement"
     }
 
     fn parameters(&self) -> Vec<ParameterDef> {
         vec![
-            ParameterDef::new("path", "string", "Path to the file to edit"),
+            ParameterDef::new("path", "string", "Path to file to edit"),
             ParameterDef::new("old_string", "string", "String to replace"),
             ParameterDef::new("new_string", "string", "Replacement string"),
         ]
