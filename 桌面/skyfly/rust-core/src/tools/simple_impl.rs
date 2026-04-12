@@ -41,26 +41,26 @@ impl Tool for BashTool {
 
         tracing::info!("Executing bash command: {}", command);
 
-        // Spawn process
-        let mut child = tokio::process::Command::new("sh")
-            .arg("-c")
-            .arg(&command);
-
+        // Build command
+        let mut cmd = tokio::process::Command::new("sh");
+        cmd.arg("-c").arg(&command);
+        
         if let Some(dir) = working_dir {
-            child = child.current_dir(dir);
+            cmd.current_dir(dir);
         }
 
-        let mut child = child.spawn()?;
+        // Spawn process
+        let mut child = cmd.spawn()?;
 
         // Wait for result with timeout
-        let result = tokio::time::timeout(
+        let output = tokio::time::timeout(
             tokio::time::Duration::from_secs(timeout_secs),
             child.wait()
         ).await;
 
         let elapsed = start.elapsed().as_millis() as u64;
 
-        match result {
+        match output {
             Ok(Ok(status)) => {
                 let stdout = child.stdout.take();
                 let stderr = child.stderr.take();
@@ -111,7 +111,7 @@ impl Tool for BashTool {
                 })
             }
             Ok(Err(e)) => {
-                anyhow::bail!("Command failed: {}", e)
+                anyhow::bail!("Failed to execute command: {}", e)
             }
             Err(_) => {
                 anyhow::bail!("Command timed out after {} seconds", timeout_secs)
@@ -140,7 +140,7 @@ impl Tool for ReadTool {
 
     fn parameters(&self) -> Vec<ParameterDef> {
         vec![
-            ParameterDef::new("path", "string", "Path to file to read"),
+            ParameterDef::new("path", "string", "Path to the file to read"),
         ]
     }
 
@@ -182,11 +182,12 @@ impl Tool for ReadTool {
             Ok(content) => {
                 let elapsed = start.elapsed().as_millis() as u64;
                 let lines = content.lines().count();
+                let bytes = content.len();
                 
                 tracing::info!(
                     "File read successfully: {} lines, {} bytes",
                     lines,
-                    content.len()
+                    bytes
                 );
 
                 Ok(ToolResult {
@@ -199,7 +200,7 @@ impl Tool for ReadTool {
                         parameters: serde_json::json!({
                             "path": path_str,
                             "lines": lines,
-                            "bytes": content.len()
+                            "bytes": bytes
                         }),
                     },
                 })
@@ -305,23 +306,22 @@ impl Tool for WriteTool {
         match fs::write(&path, content.as_bytes()).await {
             Ok(_) => {
                 let elapsed = start.elapsed().as_millis() as u64;
-                let bytes = content.len();
                 
                 tracing::info!(
                     "File written successfully: {} bytes",
-                    bytes
+                    content.len()
                 );
 
                 Ok(ToolResult {
                     success: true,
-                    output: format!("Successfully wrote {} bytes to {}", bytes, path_str),
+                    output: format!("Successfully wrote {} bytes to {}", content.len(), path_str),
                     error: None,
                     metadata: ToolMetadata {
                         execution_time_ms: elapsed,
                         tool_name: self.name().to_string(),
                         parameters: serde_json::json!({
                             "path": path_str,
-                            "bytes": bytes
+                            "bytes": content.len()
                         }),
                     },
                 })
@@ -362,7 +362,7 @@ impl Tool for EditTool {
 
     fn parameters(&self) -> Vec<ParameterDef> {
         vec![
-            ParameterDef::new("path", "string", "Path to file to edit"),
+            ParameterDef::new("path", "string", "Path to the file to edit"),
             ParameterDef::new("old_string", "string", "String to replace"),
             ParameterDef::new("new_string", "string", "Replacement string"),
         ]
@@ -392,7 +392,14 @@ impl Tool for EditTool {
 
         // Read file
         let content = match fs::read_to_string(&path).await {
-            Ok(content) => content,
+            Ok(content) => {
+                tracing::info!(
+                    "File read successfully: {} lines, {} bytes",
+                    content.lines().count(),
+                    content.len()
+                );
+                content
+            }
             Err(e) => {
                 return Ok(ToolResult {
                     success: false,
