@@ -1,6 +1,8 @@
 mod tools;
+mod ai_service;
 
 use crate::tools::{ToolRegistry, ToolArgs, BashTool, ReadTool, WriteTool, EditTool, GlobTool};
+use crate::ai_service::AIServiceClient;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
@@ -27,6 +29,13 @@ enum Commands {
         #[arg(name = "tool")]
         tool: String,
     },
+    AI {
+        #[arg(name = "task")]
+        task: String,
+        #[arg(short, long)]
+        session_id: Option<String>,
+    },
+    AIHealth,
 }
 
 #[tokio::main]
@@ -120,6 +129,88 @@ async fn main() -> Result<()> {
                 }
                 None => {
                     println!("Tool '{}' not found", tool);
+                }
+            }
+        }
+        Commands::AI { task, session_id } => {
+            let ai_client = AIServiceClient::new();
+            
+            println!("🤖 Sending task to AI service: {}", task);
+            
+            let request = crate::ai_service::TaskRequest {
+                user_input: task,
+                context: None,
+                session_id,
+            };
+            
+            match ai_client.process_task(request).await {
+                Ok(response) => {
+                    println!("\n✅ AI Response:");
+                    println!("Success: {}", response.success);
+                    println!("Reasoning: {}", response.reasoning);
+                    
+                    if response.requires_confirmation {
+                        println!("⚠️  Requires confirmation before execution");
+                    }
+                    
+                    if !response.tool_calls.is_empty() {
+                        println!("\n🔧 Tool Calls ({}):", response.tool_calls.len());
+                        for (i, tool_call) in response.tool_calls.iter().enumerate() {
+                            println!("  {}. {} - {:?}", i + 1, tool_call.tool_name, tool_call.parameters);
+                        }
+                    }
+                    
+                    if let Some(error) = response.error {
+                        println!("\n❌ Error: {}", error);
+                    }
+                    
+                    if let Some(context) = response.context {
+                        println!("\n📊 Context: {:?}", context);
+                    }
+                    
+                    // Optionally execute the tool calls
+                    if response.success && !response.tool_calls.is_empty() {
+                        println!("\n💡 To execute these tool calls, use:");
+                        for tool_call in &response.tool_calls {
+                            print!("cargo run -- execute {} ", tool_call.tool_name);
+                            for (key, value) in &tool_call.parameters {
+                                if let Some(str_val) = value.as_str() {
+                                    print!("-p {}={} ", key, str_val);
+                                } else {
+                                    print!("-p {}={} ", key, value);
+                                }
+                            }
+                            println!();
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to communicate with AI service: {}", e);
+                    eprintln!("Make sure the Python AI service is running on http://localhost:8000");
+                    eprintln!("Start it with: cd python-ai && python -m app.main");
+                }
+            }
+        }
+        Commands::AIHealth => {
+            let ai_client = AIServiceClient::new();
+            
+            println!("🏥 Checking AI service health...");
+            
+            match ai_client.health_check().await {
+                Ok(health) => {
+                    println!("\n✅ AI Service Status:");
+                    println!("  Status: {}", health.status);
+                    println!("  Service: {}", health.service);
+                    println!("  Version: {}", health.version);
+                    println!("  Components:");
+                    println!("    LLM Client: {}", if health.ai_components.llm { "✅" } else { "❌" });
+                    println!("    Planner: {}", if health.ai_components.planner { "✅" } else { "❌" });
+                    println!("    Experience Manager: {}", if health.ai_components.experience_manager { "✅" } else { "❌" });
+                }
+                Err(e) => {
+                    eprintln!("❌ Failed to check AI service health: {}", e);
+                    eprintln!("Make sure the Python AI service is running on http://localhost:8000");
+                    eprintln!("Start it with: cd python-ai && python -m app.main");
                 }
             }
         }
