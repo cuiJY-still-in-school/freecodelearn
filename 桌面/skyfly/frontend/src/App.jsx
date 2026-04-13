@@ -51,8 +51,11 @@ function App() {
   const [apiConfigs, setApiConfigs] = useState([]);
   const [configLoading, setConfigLoading] = useState(false);
   const [configMessage, setConfigMessage] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState('');
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const editRef = useRef(null);
 
   // Load messages from localStorage on mount
   useEffect(() => {
@@ -78,6 +81,34 @@ function App() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl/Cmd + K -> New chat
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        startNewChat();
+      }
+      // Escape -> Close settings
+      if (e.key === 'Escape' && showSettings) {
+        setShowSettings(false);
+      }
+      // Ctrl/Cmd + Shift + O -> Open settings
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'O') {
+        e.preventDefault();
+        setShowSettings(true);
+      }
+      // Ctrl/Cmd + Shift + E -> Export chat
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'E') {
+        e.preventDefault();
+        if (messages.length > 0) exportChat();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showSettings, messages]);
 
   // Check service health
   useEffect(() => {
@@ -151,6 +182,104 @@ function App() {
 
   const handleConfigChange = (key, value) => {
     setApiConfigs(prev => prev.map(c => c.key === key ? { ...c, value } : c));
+  };
+
+  const startEdit = (msg) => {
+    setEditingId(msg.id);
+    setEditText(msg.content);
+    setTimeout(() => editRef.current?.focus(), 50);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditText('');
+  };
+
+  const saveEdit = async () => {
+    if (!editText.trim()) return;
+    
+    // Find index of editing message
+    const editIndex = messages.findIndex(m => m.id === editingId);
+    if (editIndex === -1) return;
+    
+    // Update message and remove all subsequent messages
+    const updatedMessages = messages.slice(0, editIndex).concat({
+      ...messages[editIndex],
+      content: editText.trim(),
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+    
+    setMessages(updatedMessages);
+    setEditingId(null);
+    setEditText('');
+    setLoading(true);
+    
+    try {
+      const aiResponse = await fetch(`http://localhost:8000/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_input: editText.trim(),
+          model: selectedModel,
+        }),
+      });
+      
+      const data = await aiResponse.json();
+      
+      const aiMessage = {
+        id: Date.now(),
+        type: 'ai',
+        content: data.reasoning,
+        toolCalls: [],
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+
+      if (autoExecute && data.tool_calls && data.tool_calls.length > 0) {
+        for (const toolCall of data.tool_calls) {
+          try {
+            const toolResponse = await fetch(`http://localhost:3000/tools/${toolCall.tool_name}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(toolCall.parameters),
+            });
+            const toolData = await toolResponse.json();
+            
+            aiMessage.toolCalls.push({
+              name: toolCall.tool_name,
+              parameters: toolCall.parameters,
+              success: toolData.success,
+              output: toolData.output,
+              error: toolData.error,
+            });
+          } catch (toolError) {
+            aiMessage.toolCalls.push({
+              name: toolCall.tool_name,
+              parameters: toolCall.parameters,
+              success: false,
+              error: toolError.message,
+            });
+          }
+        }
+      } else if (data.tool_calls && data.tool_calls.length > 0) {
+        aiMessage.toolCalls = data.tool_calls.map(tc => ({
+          name: tc.tool_name,
+          parameters: tc.parameters,
+          pending: true,
+        }));
+      }
+
+      setMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        type: 'ai',
+        content: `连接失败：${error.message}`,
+        isError: true,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -446,30 +575,60 @@ function App() {
                         {msg.type === 'user' ? '你' : msg.isError ? '系统' : 'SkyFly AI'}
                       </span>
                       <span className="message-time">{msg.timestamp}</span>
-                    </div>
-                    <div className={`message-text ${msg.isError ? 'error-text' : ''}`}>
-                      {msg.type === 'user' ? (
-                        msg.content
-                      ) : (
-                        <ReactMarkdown 
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            code({ node, inline, className, children, ...props }) {
-                              if (inline) {
-                                return (
-                                  <code className={className} {...props}>
-                                    {children}
-                                  </code>
-                                );
-                              }
-                              return <CodeBlock className={className}>{children}</CodeBlock>;
-                            }
-                          }}
-                        >
-                          {msg.content}
-                        </ReactMarkdown>
+                      {msg.type === 'user' && editingId !== msg.id && (
+                        <button className="message-edit-btn" onClick={() => startEdit(msg)} title="编辑">
+                          ✏️
+                        </button>
                       )}
                     </div>
+                    {msg.type === 'user' && editingId === msg.id ? (
+                      <div className="message-edit-area">
+                        <textarea
+                          ref={editRef}
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              saveEdit();
+                            }
+                            if (e.key === 'Escape') {
+                              cancelEdit();
+                            }
+                          }}
+                          className="edit-input"
+                          rows={3}
+                        />
+                        <div className="edit-actions">
+                          <button className="edit-cancel" onClick={cancelEdit}>取消</button>
+                          <button className="edit-save" onClick={saveEdit}>保存并重新发送</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={`message-text ${msg.isError ? 'error-text' : ''}`}>
+                        {msg.type === 'user' ? (
+                          msg.content
+                        ) : (
+                          <ReactMarkdown 
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code({ node, inline, className, children, ...props }) {
+                                if (inline) {
+                                  return (
+                                    <code className={className} {...props}>
+                                      {children}
+                                    </code>
+                                  );
+                                }
+                                return <CodeBlock className={className}>{children}</CodeBlock>;
+                              }
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
+                        )}
+                      </div>
+                    )}
                     {msg.toolCalls && msg.toolCalls.map((tool, i) => (
                       <div key={i} className="tool-call">
                         <div className="tool-call-header">
