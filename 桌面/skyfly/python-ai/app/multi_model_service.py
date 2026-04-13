@@ -18,12 +18,24 @@ try:
 except ImportError:
     MULTI_MODEL_AVAILABLE = False
 
+# 导入配置API
+try:
+    from .config_api import router as config_router
+
+    CONFIG_API_AVAILABLE = True
+except ImportError:
+    CONFIG_API_AVAILABLE = False
+
 # Create app
 app = FastAPI(
     title="SkyFly AI Service",
     description="AI service with multi-model support for SkyFly automation tool",
     version="0.2.0",
 )
+
+# 挂载配置API
+if CONFIG_API_AVAILABLE:
+    app.include_router(config_router, prefix="/config", tags=["config"])
 
 
 # Request/Response models

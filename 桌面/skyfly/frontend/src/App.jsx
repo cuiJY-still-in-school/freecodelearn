@@ -10,6 +10,10 @@ function App() {
   const [autoExecute, setAutoExecute] = useState(true);
   const [selectedModel, setSelectedModel] = useState('simple');
   const [serviceStatus, setServiceStatus] = useState({ ai: false, backend: false });
+  const [showSettings, setShowSettings] = useState(false);
+  const [apiConfigs, setApiConfigs] = useState([]);
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configMessage, setConfigMessage] = useState('');
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -45,6 +49,52 @@ function App() {
     const interval = setInterval(checkHealth, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  // Load API configs
+  useEffect(() => {
+    if (showSettings) {
+      loadConfigs();
+    }
+  }, [showSettings]);
+
+  const loadConfigs = async () => {
+    setConfigLoading(true);
+    try {
+      const res = await fetch('http://localhost:8000/config');
+      const data = await res.json();
+      setApiConfigs(data.configs || []);
+    } catch (e) {
+      setApiConfigs([]);
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const saveConfigs = async () => {
+    setConfigLoading(true);
+    setConfigMessage('');
+    try {
+      const res = await fetch('http://localhost:8000/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ configs: apiConfigs.map(c => ({ key: c.key, value: c.value })) }),
+      });
+      const data = await res.json();
+      setConfigMessage(data.message || '保存成功');
+      // Refresh health to update model availability
+      setTimeout(() => {
+        fetch('http://localhost:8000/health').then(r => r.ok && window.location.reload());
+      }, 500);
+    } catch (e) {
+      setConfigMessage('保存失败: ' + e.message);
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const handleConfigChange = (key, value) => {
+    setApiConfigs(prev => prev.map(c => c.key === key ? { ...c, value } : c));
+  };
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
@@ -245,6 +295,12 @@ function App() {
                 />
               </label>
             </div>
+            <button 
+              className="settings-btn"
+              onClick={() => setShowSettings(true)}
+            >
+              ⚙️ API 密钥配置
+            </button>
           </div>
         </div>
 
@@ -354,6 +410,54 @@ function App() {
             </>
           )}
         </div>
+
+        {showSettings && (
+          <div className="settings-overlay" onClick={(e) => e.target === e.currentTarget && setShowSettings(false)}>
+            <div className="settings-panel">
+              <div className="settings-panel-header">
+                <h2>⚙️ API 密钥配置</h2>
+                <button className="close-btn" onClick={() => setShowSettings(false)}>✕</button>
+              </div>
+              <div className="settings-panel-content">
+                <p className="settings-desc">
+                  在这里配置各 AI 平台的 API Key，配置后会自动保存到 <code>python-ai/.env</code> 文件并立即生效。
+                </p>
+                {configLoading && apiConfigs.length === 0 ? (
+                  <div className="settings-loading">加载中...</div>
+                ) : (
+                  <div className="config-list">
+                    {apiConfigs.map((cfg) => (
+                      <div key={cfg.key} className="config-item">
+                        <label className="config-label">
+                          {cfg.name}
+                          {cfg.configured && <span className="configured-badge">已配置</span>}
+                        </label>
+                        <input
+                          type={cfg.is_secret ? 'password' : 'text'}
+                          className="config-input"
+                          value={cfg.value}
+                          placeholder={cfg.is_secret ? 'sk-...' : '输入配置值'}
+                          onChange={(e) => handleConfigChange(cfg.key, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {configMessage && (
+                  <div className={`config-message ${configMessage.includes('失败') ? 'error' : 'success'}`}>
+                    {configMessage}
+                  </div>
+                )}
+              </div>
+              <div className="settings-panel-footer">
+                <button className="secondary-btn" onClick={() => setShowSettings(false)}>取消</button>
+                <button className="primary-btn" onClick={saveConfigs} disabled={configLoading}>
+                  {configLoading ? '保存中...' : '保存配置'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="input-container">
           <form onSubmit={handleSubmit} className="input-wrapper">
