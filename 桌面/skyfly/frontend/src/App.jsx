@@ -3,6 +3,43 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import './App.css';
 
+function CopyButton({ code }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  return (
+    <button className="copy-button" onClick={handleCopy}>
+      {copied ? '已复制!' : '复制'}
+    </button>
+  );
+}
+
+function CodeBlock({ children, className }) {
+  const code = String(children).replace(/\n$/, '');
+  const language = className ? className.replace('language-', '') : '';
+
+  return (
+    <div className="code-block-wrapper">
+      <div className="code-block-header">
+        {language && <span className="code-language">{language}</span>}
+        <CopyButton code={code} />
+      </div>
+      <pre className={className}>
+        <code className={className}>{children}</code>
+      </pre>
+    </div>
+  );
+}
+
 function App() {
   const [messages, setMessages] = useState([]);
   const [command, setCommand] = useState('');
@@ -362,7 +399,21 @@ function App() {
                       {msg.type === 'user' ? (
                         msg.content
                       ) : (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            code({ node, inline, className, children, ...props }) {
+                              if (inline) {
+                                return (
+                                  <code className={className} {...props}>
+                                    {children}
+                                  </code>
+                                );
+                              }
+                              return <CodeBlock className={className}>{children}</CodeBlock>;
+                            }
+                          }}
+                        >
                           {msg.content}
                         </ReactMarkdown>
                       )}
