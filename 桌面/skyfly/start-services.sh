@@ -26,7 +26,7 @@ fi
 source .venv/bin/activate
 pip install -q fastapi uvicorn python-dotenv 2>/dev/null
 
-nohup python -m app.simple_service > /tmp/ai_service.log 2>&1 &
+nohup python -m app.multi_model_service > /tmp/ai_service.log 2>&1 &
 AI_PID=$!
 echo "${GREEN}✓ AI Service started (PID: $AI_PID)${NC}"
 echo ""

@@ -1,176 +1,233 @@
 SkyFly - AI-Powered Automation Tool
 
-SkyFly is an AI-powered automation tool that enables users to accomplish any computer task through natural language instructions. Inspired by openclaw, it combines the core toolset of opencode with advanced AI-driven autonomous exploration and experience transfer logic.
+SkyFly 是一款 AI 驱动的自动化工具，用户可以通过自然语言指令完成任何计算机任务。受 openclaw 启发，它结合了 opencode 的核心工具集和先进的 AI 自主探索、经验传递逻辑。
 
-## Project Status
+## 项目状态
 
-**Phase 1: Rust Core Engine (Completed ✅)**
-- ✅ Tool framework and trait definitions
-- ✅ Bash tool implementation
-- ✅ Read/Write tools implementation
-- ✅ Edit tool implementation
-- ✅ Glob tool implementation
-- ✅ Python AI service integration
-- ✅ Frontend interface development (React + Express)
+**Phase 1: Rust 核心引擎 (已完成 ✅)**
+- ✅ 工具框架和 trait 定义
+- ✅ Bash / Read / Write / Edit / Glob 工具实现
+- ✅ Python AI 服务集成
+- ✅ 多模型适配（OpenAI / DeepSeek / Kimi / 自定义 API）
 
-**Phase 2: Frontend Development (In Progress 🚧)**
-- ✅ React frontend with Vite
-- ✅ Express backend server
-- ✅ Full-stack integration
-- 🚧 Tauri desktop application
+**Phase 2: 前端与全栈集成 (已完成 ✅)**
+- ✅ React 现代化聊天界面（类似 ChatGPT）
+- ✅ Express 后端服务器
+- ✅ 全栈端到端自动化
+- 🚧 Tauri 桌面应用（待开发）
 
-## Features
+## 核心特性
 
-- **Natural Language Interface**: Understand and execute complex user requests
-- **Core Toolset**: bash, webfetch, read, write, edit, glob operations
-- **Autonomous Exploration**: AI learns from its own exploration experiences
-- **Experience Transfer**: Hierarchical experience reuse system
-- **Dual Deployment**: Local mode (macOS/Linux) + Sandbox mode (Ubuntu container)
+- **自然语言界面**：理解和执行复杂用户请求
+- **核心工具集**：bash、webfetch、read、write、edit、glob
+- **多模型支持**：一键切换 OpenAI、DeepSeek、Kimi、自定义 API
+- **自动执行**：AI 分析后自动调用系统工具执行
+- **经验传递**：层次化经验复用系统
+- **双模式部署**：本地模式（macOS/Linux）+ 沙箱模式（Ubuntu 容器）
 
-## Core Technology
+## 技术栈
 
-- **Core Engine**: Rust (Tokio, clap, serde)
-- **AI Service**: Python (FastAPI, LangChain, LLM integration)
-- **Frontend**: React + Vite + Express backend
-- **Desktop App**: Tauri + React
-- **Database**: SQLite + LanceDB (vector database)
-- **Communication**: HTTP/REST between components
+- **核心引擎**：Rust（Tokio, clap, serde）
+- **AI 服务**：Python（FastAPI, httpx, 多模型适配）
+- **前端**：React 19 + Vite + Express 后端
+- **通信**：HTTP/REST
+- **数据库**：SQLite + LanceDB（向量数据库）
 
-## Implementation Plan
+## 快速开始
 
-See `plan1.0.md` for detailed implementation roadmap.
+### 环境要求
 
-## Getting Started
-
-### Prerequisites
-
-- Rust 1.70+ 
+- Rust 1.70+
 - Python 3.10+
 - Node.js 18+
-- Docker/Podman
 
-### Development Setup
+### 一键启动
 
 ```bash
-# 1. Build Rust Core Engine
-cd rust-core
-cargo build --release
+# 1. 构建 Rust 核心引擎
+cd rust-core && cargo build --release
 
-# 2. Start Python AI Service
+# 2. 启动所有服务（AI 服务 + 后端 + 前端）
+./start-services.sh
+
+# 3. 浏览器打开
+# http://localhost:5173
+```
+
+### 手动启动（开发调试）
+
+```bash
+# AI 服务
 cd python-ai
 source .venv/bin/activate
-python -m app.simple_service &
+python -m app.multi_model_service &
 
-# 3. Start Backend Server
+# 后端服务
 cd frontend/backend
 npm start &
 
-# 4. Start Frontend Dev Server
+# 前端开发服务器
 cd frontend
 npm run dev
 ```
 
-### Running the Application
+## AI 模型配置
 
-**Development Mode:**
+SkyFly 支持多种 AI 模型，只需在 `python-ai/.env` 中配置对应的 API Key：
+
 ```bash
-# Open browser to http://localhost:5173
-# The frontend provides a clean interface for natural language commands
+cd python-ai
+cp .env.example .env
+# 编辑 .env，填入你的 API 密钥
 ```
 
-**CLI Interface:**
-```bash
-# Using Rust CLI directly
-cd rust-core
-cargo run -- ai "list *.md files" --execute
+### 支持的模型
 
-# Check tools
+| 模型 | 环境变量 | 获取地址 |
+|------|---------|---------|
+| 本地规则引擎 | 无需配置 | 内置 |
+| OpenAI GPT-4 | `OPENAI_API_KEY` | https://platform.openai.com |
+| DeepSeek V3 | `DEEPSEEK_API_KEY` | https://platform.deepseek.com |
+| Kimi (Moonshot) | `KIMI_API_KEY` | https://platform.moonshot.cn |
+| 自定义 API | `CUSTOM_API_KEY` + `CUSTOM_BASE_URL` | 任意兼容 OpenAI 格式的服务 |
+
+### 配置示例
+
+```env
+# OpenAI
+OPENAI_API_KEY=sk-xxx
+DEFAULT_MODEL=gpt-4
+
+# DeepSeek
+DEEPSEEK_API_KEY=sk-xxx
+
+# Kimi
+KIMI_API_KEY=sk-xxx
+
+# 自定义
+CUSTOM_API_KEY=sk-xxx
+CUSTOM_BASE_URL=https://api.custom.com/v1
+```
+
+> **注意**：如果某个模型未配置或请求失败，系统会自动回退到本地规则引擎。
+
+## 使用示例
+
+### 前端界面
+
+在浏览器中访问 http://localhost:5173，你会看到一个现代化的聊天界面：
+
+1. 在底部输入框输入自然语言命令
+2. 选择左侧的 AI 模型（默认使用本地规则引擎）
+3. 开启/关闭"自动执行工具"
+4. 按 Enter 发送，AI 会分析并执行
+
+**示例命令**：
+- `列出当前目录下所有的 Markdown 文件`
+- `读取 README.md 的内容`
+- `运行 echo Hello SkyFly`
+- `创建文件 /tmp/test.txt，内容为 Hello World`
+
+### CLI 直接调用
+
+```bash
+# AI 任务处理（自动执行）
+cd rust-core
+cargo run -- ai "列出所有的 md 文件" --execute
+
+# 查看工具列表
 cargo run -- list
+
+# 查看工具详情
 cargo run -- info bash
 
-# Check AI service health
+# 健康检查
 cargo run -- ai-health
+
+# 直接执行工具
+cargo run -- execute bash -p command="ls -la"
+cargo run -- execute read -p path=README.md
 ```
 
-## Project Structure
+## 项目结构
 
 ```
 skyfly/
-├── rust-core/           # Rust core engine
+├── rust-core/              # Rust 核心引擎
 │   ├── src/
-│   │   ├── main.rs      # CLI entry point
-│   │   ├── ai_service.rs # AI service HTTP client
-│   │   └── tools/       # Tool implementations
-│   │       ├── types.rs # Shared types and traits
-│   │       ├── simple_impl.rs # Tool implementations
+│   │   ├── main.rs         # CLI 入口
+│   │   ├── ai_service.rs   # AI 服务 HTTP 客户端
+│   │   └── tools/
+│   │       ├── types.rs
+│   │       ├── simple_impl.rs
 │   │       └── registry.rs
 │   └── Cargo.toml
-├── python-ai/          # Python AI service
-│   └── app/
-│       ├── main.py      # Full AI service
-│       └── simple_service.py # Simplified testing version
-├── frontend/            # React frontend + Express backend
+├── python-ai/              # Python AI 服务
+│   ├── app/
+│   │   ├── multi_model_service.py   # 主服务入口（多模型）
+│   │   ├── multi_model_client.py    # 统一多模型客户端
+│   │   ├── simple_service.py        # 简化版规则引擎
+│   │   ├── main.py                  # 完整版服务（LLM+规划）
+│   │   ├── llm_client.py
+│   │   ├── planner.py
+│   │   └── experience_manager.py
+│   ├── .env.example
+│   └── requirements.txt
+├── frontend/               # React 前端 + Express 后端
 │   ├── src/
-│   │   ├── App.jsx     # Main React component
-│   │   ├── App.css     # Styling
-│   │   └── main.jsx    # Entry point
+│   │   ├── App.jsx        # 主组件（聊天界面）
+│   │   ├── App.css        # 样式（深色主题）
+│   │   └── main.jsx
 │   ├── backend/
-│   │   └── server.js    # Express server
+│   │   └── server.js      # Express API 代理
+│   ├── index.html
 │   └── package.json
-├── plan1.0.md         # Implementation plan
+├── start-services.sh       # 一键启动脚本
+├── stop-services.sh        # 一键停止脚本
+├── plan1.0.md             # 详细开发计划
 └── README.md
 ```
 
-## Usage Examples
+## 运行中的服务
 
-### Natural Language Commands
-```bash
-# File operations
-"list all markdown files"
-"read file README.md"
-"write file /tmp/test.txt with content 'Hello World'"
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| AI Service | http://localhost:8000 | FastAPI，任务解析 |
+| Backend | http://localhost:3000 | Express，工具执行代理 |
+| Frontend | http://localhost:5173 | React 开发服务器 |
 
-# System operations
-"echo Hello from SkyFly"
-"check disk space"
-```
-
-### CLI Examples
-```bash
-# AI-powered task processing
-skyfly-core ai "list *.md files" --execute
-skyfly-core ai "echo Hello World"
-
-# Direct tool execution
-skyfly-core execute bash -p command="ls -la"
-skyfly-core execute read -p path=README.md
-skyfly-core execute glob -p pattern="*.md"
-```
-
-## Current Services
-
-- **AI Service**: http://localhost:8000
-- **Backend Server**: http://localhost:3000
-- **Frontend Dev**: http://localhost:5173
-
-## Architecture
+## 架构图
 
 ```
-User → Frontend (React) → Backend (Express) → 
-  ├→ Rust Core (Tools) → System
-  └→ AI Service (Python) → Task Analysis → Tool Calls
+用户 → React 前端 (http://localhost:5173)
+  ↓
+Express 后端 (http://localhost:3000)
+  ├→ Rust 核心 (本地工具执行) → 操作系统
+  └→ Python AI 服务 (http://localhost:8000) → 任务分析 → 返回工具调用
 ```
 
-## License
+## 开发计划
 
-MIT License - See LICENSE file for details
+详见 `plan1.0.md`，主要里程碑：
 
-## Contributing
+- [x] Phase 0: 项目初始化
+- [x] Phase 1: Rust 核心引擎（5个核心工具）
+- [x] Phase 2: Python AI 服务 + 多模型适配
+- [x] Phase 3: React 前端 + Express 后端
+- [ ] Phase 4: Tauri 桌面应用封装
+- [ ] Phase 5: 经验管理与自主学习
+- [ ] Phase 6: 沙箱模式与 Docker 部署
 
-This is an open-source project for personal use. Contributions welcome.
+## 许可证
+
+MIT License - 详见 LICENSE 文件
+
+## 贡献
+
+这是一个面向个人使用的开源项目，欢迎贡献代码和建议。
 
 ---
 
-**Status**: Development Phase 2 - Frontend Development
+**状态**：开发阶段 2 已完成，前端与多模型适配已上线
 
-**Last Updated**: 2026-04-13
+**最后更新**：2026-04-13
