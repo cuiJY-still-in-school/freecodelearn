@@ -174,12 +174,62 @@ function App() {
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
             >
-              <option value="simple">🧪 简单规则引擎（本地）</option>
-              <option value="openai">🤖 OpenAI GPT-4</option>
-              <option value="deepseek">🐋 DeepSeek V3</option>
-              <option value="kimi">🌙 Kimi K2</option>
-              <option value="custom">⚙️ 自定义 API</option>
+              <optgroup label="🧪 本地 / 免费">
+                <option value="simple">规则引擎（本地）</option>
+              </optgroup>
+              
+              <optgroup label="🌍 国际模型">
+                <option value="openai-gpt4o">OpenAI GPT-4o</option>
+                <option value="openai">OpenAI GPT-4</option>
+                <option value="openai-gpt35">OpenAI GPT-3.5 Turbo</option>
+                <option value="claude-sonnet">Claude 3.5 Sonnet</option>
+                <option value="claude">Claude 3 Opus</option>
+                <option value="gemini">Google Gemini 1.5 Pro</option>
+                <option value="gemini-flash">Google Gemini 1.5 Flash</option>
+                <option value="llama">Meta Llama 3.1 70B</option>
+                <option value="llama-405b">Meta Llama 3.1 405B</option>
+                <option value="mistral">Mistral Large</option>
+                <option value="mistral-codestral">Mistral Codestral</option>
+              </optgroup>
+              
+              <optgroup label="🇨🇳 中国模型">
+                <option value="deepseek">DeepSeek V3</option>
+                <option value="deepseek-coder">DeepSeek Coder</option>
+                <option value="kimi">Kimi (Moonshot)</option>
+                <option value="qwen">通义千问 Turbo</option>
+                <option value="qwen-max">通义千问 Max</option>
+                <option value="qwen-coder">通义千问 Coder</option>
+                <option value="ernie">文心一言 ERNIE 4.0</option>
+                <option value="zhipu">智谱 GLM-4</option>
+              </optgroup>
+              
+              <optgroup label="⚙️ 自定义">
+                <option value="custom">自定义 API</option>
+              </optgroup>
             </select>
+            <p className="model-description">
+              {selectedModel === 'simple' && '无需API Key，快速本地规则解析'}
+              {selectedModel === 'openai-gpt4o' && 'OpenAI 最强多模态模型，速度快、效果稳'}
+              {selectedModel === 'openai' && 'GPT-4，强大的通用推理能力'}
+              {selectedModel === 'openai-gpt35' && 'GPT-3.5 Turbo，速度快、成本低'}
+              {selectedModel === 'claude-sonnet' && 'Claude 3.5 Sonnet，编程任务首选'}
+              {selectedModel === 'claude' && 'Claude 3 Opus，长文本和复杂任务最强'}
+              {selectedModel === 'gemini' && 'Google Gemini 1.5 Pro，多模态和长上下文'}
+              {selectedModel === 'gemini-flash' && 'Gemini Flash，高速低成本的日常任务'}
+              {selectedModel === 'llama' && 'Meta Llama 3.1 70B，开源模型标杆'}
+              {selectedModel === 'llama-405b' && 'Meta Llama 3.1 405B，开源最强模型'}
+              {selectedModel === 'mistral' && 'Mistral Large，欧洲最先进的LLM'}
+              {selectedModel === 'mistral-codestral' && 'Mistral Codestral，专为代码生成优化'}
+              {selectedModel === 'deepseek' && 'DeepSeek V3，性价比之王，中文优秀'}
+              {selectedModel === 'deepseek-coder' && 'DeepSeek Coder，专注编程和代码理解'}
+              {selectedModel === 'kimi' && 'Kimi，中文长文档处理能力强'}
+              {selectedModel === 'qwen' && '通义千问 Turbo，阿里云高性价比模型'}
+              {selectedModel === 'qwen-max' && '通义千问 Max，阿里最强通用大模型'}
+              {selectedModel === 'qwen-coder' && '通义千问 Coder，中文代码场景首选'}
+              {selectedModel === 'ernie' && '文心一言 ERNIE 4.0，百度中文大模型'}
+              {selectedModel === 'zhipu' && '智谱 GLM-4，免费额度多，中文友好'}
+              {selectedModel === 'custom' && '自定义 OpenAI 兼容 API'}
+            </p>
           </div>
 
           <div className="settings-section">

@@ -31,7 +31,9 @@ class TaskRequest(BaseModel):
     user_input: str
     context: Optional[Dict[str, Any]] = None
     session_id: Optional[str] = None
-    model: Optional[str] = "simple"  # simple/openai/deepseek/kimi/custom
+    model: Optional[str] = (
+        "simple"  # simple/openai/openai-gpt35/claude/claude-sonnet/gemini/deepseek/kimi/qwen/qwen-max/ernie/zhipu/custom
+    )
 
 
 class ToolCall(BaseModel):
@@ -102,6 +104,21 @@ async def list_models():
                 }
             )
 
+    # 确保显示所有模型（即使未配置）
+    all_providers = MultiModelClient.MODEL_PRESETS if MULTI_MODEL_AVAILABLE else {}
+    displayed_ids = {m["id"] for m in models}
+
+    for provider_id, provider_info in all_providers.items():
+        if provider_id not in displayed_ids:
+            models.append(
+                {
+                    "id": provider_id,
+                    "name": provider_info["name"],
+                    "configured": False,
+                    "description": f"默认模型: {provider_info['default_model']}",
+                }
+            )
+
     return {"models": models}
 
 
@@ -117,8 +134,24 @@ async def process_task(request: TaskRequest):
             return await _process_with_simple_engine(request)
         elif MULTI_MODEL_AVAILABLE and model in [
             "openai",
+            "openai-gpt35",
+            "openai-gpt4o",
+            "claude",
+            "claude-sonnet",
+            "gemini",
+            "gemini-flash",
+            "llama",
+            "llama-405b",
+            "mistral",
+            "mistral-codestral",
             "deepseek",
+            "deepseek-coder",
             "kimi",
+            "qwen",
+            "qwen-max",
+            "qwen-coder",
+            "ernie",
+            "zhipu",
             "custom",
         ]:
             return await _process_with_llm(request, model)

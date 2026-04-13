@@ -15,24 +15,146 @@ class MultiModelClient:
             "api_key_env": "OPENAI_API_KEY",
             "default_model": "gpt-4",
             "name": "OpenAI GPT-4",
+            "category": "international",
+        },
+        "openai-gpt35": {
+            "base_url": "https://api.openai.com/v1",
+            "api_key_env": "OPENAI_API_KEY",
+            "default_model": "gpt-3.5-turbo",
+            "name": "OpenAI GPT-3.5",
+            "category": "international",
+        },
+        "openai-gpt4o": {
+            "base_url": "https://api.openai.com/v1",
+            "api_key_env": "OPENAI_API_KEY",
+            "default_model": "gpt-4o",
+            "name": "OpenAI GPT-4o",
+            "category": "international",
+        },
+        "claude": {
+            "base_url": "https://api.anthropic.com/v1",
+            "api_key_env": "ANTHROPIC_API_KEY",
+            "default_model": "claude-3-opus-20240229",
+            "name": "Claude 3 Opus",
+            "category": "international",
+            "anthropic_version": "2023-06-01",
+        },
+        "claude-sonnet": {
+            "base_url": "https://api.anthropic.com/v1",
+            "api_key_env": "ANTHROPIC_API_KEY",
+            "default_model": "claude-3-sonnet-20240229",
+            "name": "Claude 3 Sonnet",
+            "category": "international",
+            "anthropic_version": "2023-06-01",
+        },
+        "gemini": {
+            "base_url": "https://generativelanguage.googleapis.com/v1beta",
+            "api_key_env": "GOOGLE_API_KEY",
+            "default_model": "gemini-1.5-pro",
+            "name": "Google Gemini 1.5 Pro",
+            "category": "international",
+            "is_gemini": True,
+        },
+        "gemini-flash": {
+            "base_url": "https://generativelanguage.googleapis.com/v1beta",
+            "api_key_env": "GOOGLE_API_KEY",
+            "default_model": "gemini-1.5-flash",
+            "name": "Google Gemini 1.5 Flash",
+            "category": "international",
+            "is_gemini": True,
+        },
+        "llama": {
+            "base_url": "https://api.together.xyz/v1",
+            "api_key_env": "TOGETHER_API_KEY",
+            "default_model": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+            "name": "Meta Llama 3.1 70B",
+            "category": "international",
+        },
+        "llama-405b": {
+            "base_url": "https://api.together.xyz/v1",
+            "api_key_env": "TOGETHER_API_KEY",
+            "default_model": "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo",
+            "name": "Meta Llama 3.1 405B",
+            "category": "international",
+        },
+        "mistral": {
+            "base_url": "https://api.mistral.ai/v1",
+            "api_key_env": "MISTRAL_API_KEY",
+            "default_model": "mistral-large-latest",
+            "name": "Mistral Large",
+            "category": "international",
+        },
+        "mistral-codestral": {
+            "base_url": "https://api.mistral.ai/v1",
+            "api_key_env": "MISTRAL_API_KEY",
+            "default_model": "codestral-latest",
+            "name": "Mistral Codestral",
+            "category": "international",
         },
         "deepseek": {
             "base_url": "https://api.deepseek.com/v1",
             "api_key_env": "DEEPSEEK_API_KEY",
             "default_model": "deepseek-chat",
             "name": "DeepSeek V3",
+            "category": "chinese",
+        },
+        "deepseek-coder": {
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key_env": "DEEPSEEK_API_KEY",
+            "default_model": "deepseek-coder",
+            "name": "DeepSeek Coder",
+            "category": "chinese",
         },
         "kimi": {
             "base_url": "https://api.moonshot.cn/v1",
             "api_key_env": "KIMI_API_KEY",
             "default_model": "moonshot-v1-8k",
-            "name": "Kimi",
+            "name": "Kimi (Moonshot)",
+            "category": "chinese",
+        },
+        "qwen": {
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "api_key_env": "QWEN_API_KEY",
+            "default_model": "qwen-turbo",
+            "name": "通义千问 Qwen Turbo",
+            "category": "chinese",
+        },
+        "qwen-max": {
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "api_key_env": "QWEN_API_KEY",
+            "default_model": "qwen-max",
+            "name": "通义千问 Qwen Max",
+            "category": "chinese",
+        },
+        "qwen-coder": {
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "api_key_env": "QWEN_API_KEY",
+            "default_model": "qwen-coder-plus",
+            "name": "通义千问 Coder",
+            "category": "chinese",
+        },
+        "ernie": {
+            "base_url": "https://aip.baidubce.com/rpc/2.0/ai_custom/v1",
+            "api_key_env": "ERNIE_API_KEY",
+            "default_model": "ernie-bot-4",
+            "name": "文心一言 ERNIE 4.0",
+            "category": "chinese",
+            "is_baidu": True,
+            "secret_key_env": "ERNIE_SECRET_KEY",
+        },
+        "zhipu": {
+            "base_url": "https://open.bigmodel.cn/api/paas/v4",
+            "api_key_env": "ZHIPU_API_KEY",
+            "default_model": "glm-4",
+            "name": "智谱 GLM-4",
+            "category": "chinese",
         },
         "custom": {
             "base_url": "",
             "api_key_env": "CUSTOM_API_KEY",
             "default_model": "custom-model",
             "name": "Custom API",
+            "category": "custom",
         },
     }
 
@@ -67,40 +189,118 @@ class MultiModelClient:
         temperature: float = 0.7,
         max_tokens: int = 2000,
     ) -> str:
-        """生成LLM回复"""
+        """生成LLM回复，支持多种API格式"""
         if not self.is_available():
             raise Exception(f"{self.name} 未配置：缺少 API key 或 base URL")
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
 
         system_content = (
             system_prompt
             or "You are a helpful AI assistant that helps users accomplish tasks by planning and executing tool calls."
         )
 
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_content},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
+        preset = self.MODEL_PRESETS.get(self.provider, self.MODEL_PRESETS["openai"])
+        is_anthropic = "anthropic_version" in preset
+        is_gemini = preset.get("is_gemini", False)
+        is_baidu = preset.get("is_baidu", False)
 
-        # DeepSeek/Kimi 等兼容 OpenAI 格式的 API
-        endpoint = f"{self.base_url.rstrip('/')}/chat/completions"
+        # Anthropic Claude API 格式
+        if is_anthropic:
+            headers = {
+                "x-api-key": self.api_key,
+                "anthropic-version": preset["anthropic_version"],
+                "Content-Type": "application/json",
+                "anthropic-dangerous-direct-browser-access": "false",
+            }
+
+            payload = {
+                "model": self.model,
+                "max_tokens": max_tokens,
+                "system": system_content,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+
+            endpoint = f"{self.base_url.rstrip('/')}/messages"
+
+        # Google Gemini API 格式
+        elif is_gemini:
+            headers = {
+                "Content-Type": "application/json",
+            }
+
+            payload = {
+                "contents": [
+                    {"parts": [{"text": f"{system_content}\n\nUser: {prompt}"}]}
+                ],
+                "generationConfig": {
+                    "temperature": temperature,
+                    "maxOutputTokens": max_tokens,
+                },
+            }
+
+            params = f"?key={self.api_key}"
+            endpoint = f"{self.base_url.rstrip('/')}/models/{self.model}:generateContent{params}"
+
+        # 百度文心一言 API 格式
+        elif is_baidu:
+            secret_key = os.getenv(preset["secret_key_env"], "")
+            headers = {
+                "Content-Type": "application/json",
+            }
+
+            payload = {
+                "messages": [{"role": "user", "content": prompt}],
+            }
+
+            params = f"?access_token={self.api_key}"
+            endpoint = f"{self.base_url.rstrip('/')}/chat/completions{params}"
+
+        # OpenAI 兼容格式（DeepSeek, Kimi, 通义千问, 智谱等）
+        else:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+
+            endpoint = f"{self.base_url.rstrip('/')}/chat/completions"
 
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(endpoint, headers=headers, json=payload)
-                response.raise_for_status()
+                if is_gemini:
+                    # Gemini 使用 POST 请求
+                    response = await client.post(
+                        endpoint, headers=headers, json=payload
+                    )
+                else:
+                    response = await client.post(
+                        endpoint, headers=headers, json=payload
+                    )
 
+                response.raise_for_status()
                 data = response.json()
-                return data["choices"][0]["message"]["content"]
+
+                # 不同 API 的响应格式解析
+                if is_anthropic:
+                    # Anthropic 格式
+                    return data["content"][0]["text"]
+                elif is_gemini:
+                    # Gemini 格式
+                    return data["candidates"][0]["content"]["parts"][0]["text"]
+                elif is_baidu:
+                    # 百度格式
+                    return data["result"]
+                else:
+                    # OpenAI 兼容格式
+                    return data["choices"][0]["message"]["content"]
 
         except httpx.HTTPStatusError as e:
             error_detail = ""
