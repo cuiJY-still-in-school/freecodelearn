@@ -34,6 +34,8 @@ enum Commands {
         task: String,
         #[arg(short, long)]
         session_id: Option<String>,
+        #[arg(short, long)]
+        execute: bool,
     },
     AIHealth,
 }
@@ -132,13 +134,13 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        Commands::AI { task, session_id } => {
+        Commands::AI { task, session_id, execute } => {
             let ai_client = AIServiceClient::new();
             
             println!("🤖 Sending task to AI service: {}", task);
             
             let request = crate::ai_service::TaskRequest {
-                user_input: task,
+                user_input: task.clone(),
                 context: None,
                 session_id,
             };
@@ -170,24 +172,46 @@ async fn main() -> Result<()> {
                     
                     // Optionally execute the tool calls
                     if response.success && !response.tool_calls.is_empty() {
-                        println!("\n💡 To execute these tool calls, use:");
-                        for tool_call in &response.tool_calls {
-                            print!("cargo run -- execute {} ", tool_call.tool_name);
-                            for (key, value) in &tool_call.parameters {
-                                if let Some(str_val) = value.as_str() {
-                                    print!("-p {}={} ", key, str_val);
-                                } else {
-                                    print!("-p {}={} ", key, value);
+                        if execute {
+                            println!("\n🚀 Executing tool calls...");
+                            for tool_call in &response.tool_calls {
+                                let args = ai_client.tool_call_to_args(tool_call);
+                                match registry.execute(args).await {
+                                    Ok(result) => {
+                                        println!("\n📋 Tool '{}' completed:", tool_call.tool_name);
+                                        println!("  Success: {}", result.success);
+                                        println!("  Output: {}", result.output);
+                                        if let Some(error) = result.error {
+                                            println!("  Error: {}", error);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("\n❌ Failed to execute tool '{}': {}", tool_call.tool_name, e);
+                                    }
                                 }
                             }
-                            println!();
+                        } else {
+                            println!("\n💡 To execute these tool calls, use:");
+                            for tool_call in &response.tool_calls {
+                                print!("cargo run -- execute {} ", tool_call.tool_name);
+                                for (key, value) in &tool_call.parameters {
+                                    if let Some(str_val) = value.as_str() {
+                                        print!("-p {}={} ", key, str_val);
+                                    } else {
+                                        print!("-p {}={} ", key, value);
+                                    }
+                                }
+                                println!();
+                            }
+                            println!("\n💡 Or use --execute flag to run automatically:");
+                            println!("cargo run -- ai \"{}\" --execute", task.replace("\"", "\\\""));
                         }
                     }
                 }
                 Err(e) => {
                     eprintln!("❌ Failed to communicate with AI service: {}", e);
-                    eprintln!("Make sure the Python AI service is running on http://localhost:8000");
-                    eprintln!("Start it with: cd python-ai && python -m app.main");
+                    eprintln!("Make sure to start the Python AI service:");
+                    eprintln!("cd python-ai && source .venv/bin/activate && python -m app.simple_service");
                 }
             }
         }
