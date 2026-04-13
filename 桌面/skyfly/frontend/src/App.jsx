@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import './App.css';
 
 function App() {
@@ -301,7 +303,13 @@ function App() {
                       <span className="message-time">{msg.timestamp}</span>
                     </div>
                     <div className={`message-text ${msg.isError ? 'error-text' : ''}`}>
-                      {msg.content}
+                      {msg.type === 'user' ? (
+                        msg.content
+                      ) : (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      )}
                     </div>
                     {msg.toolCalls && msg.toolCalls.map((tool, i) => (
                       <div key={i} className="tool-call">
