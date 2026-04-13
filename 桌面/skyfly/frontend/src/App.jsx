@@ -54,6 +54,26 @@ function App() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Load messages from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('skyfly_messages');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        }
+      } catch (e) {
+        console.error('Failed to load messages:', e);
+      }
+    }
+  }, []);
+
+  // Persist messages to localStorage
+  useEffect(() => {
+    localStorage.setItem('skyfly_messages', JSON.stringify(messages));
+  }, [messages]);
+
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -226,7 +246,30 @@ function App() {
 
   const startNewChat = () => {
     setMessages([]);
+    localStorage.removeItem('skyfly_messages');
     inputRef.current?.focus();
+  };
+
+  const exportChat = () => {
+    const content = messages.map(m => {
+      const role = m.type === 'user' ? '用户' : 'AI';
+      return `## ${role} (${m.timestamp})\n\n${m.content}`;
+    }).join('\n\n---\n\n');
+    
+    const blob = new Blob([content], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `skyfly-chat-${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const clearHistory = () => {
+    if (confirm('确定要清空所有对话历史吗？此操作不可恢复。')) {
+      setMessages([]);
+      localStorage.removeItem('skyfly_messages');
+    }
   };
 
   const useExample = (text) => {
@@ -339,6 +382,15 @@ function App() {
               ⚙️ API 密钥配置
             </button>
           </div>
+        </div>
+
+        <div className="sidebar-actions">
+          <button className="sidebar-action-btn" onClick={exportChat} disabled={messages.length === 0}>
+            📥 导出对话
+          </button>
+          <button className="sidebar-action-btn danger" onClick={clearHistory} disabled={messages.length === 0}>
+            🗑️ 清空历史
+          </button>
         </div>
 
         <div className="sidebar-footer">
