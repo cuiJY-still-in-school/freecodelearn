@@ -20,6 +20,7 @@ struct CoreStatus {
     running: bool,
     version: Option<String>,
     present: bool,
+    uptime: u64,
 }
 
 /// 当前内核状态(是否存在 + 版本 + 路径)。
@@ -61,6 +62,7 @@ fn core_status(app: tauri::AppHandle, mgr: tauri::State<CoreManager>) -> CoreSta
         running: mgr.is_running(),
         version: info.version,
         present: info.present,
+        uptime: mgr.uptime().unwrap_or(0),
     }
 }
 

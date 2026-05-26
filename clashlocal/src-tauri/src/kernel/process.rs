@@ -7,6 +7,7 @@ use crate::kernel::{config, kernel_bin_path};
 #[derive(Default)]
 pub struct CoreManager {
     child: Mutex<Option<Child>>,
+    started: Mutex<Option<std::time::Instant>>,
 }
 
 impl CoreManager {
@@ -56,6 +57,7 @@ impl CoreManager {
         let child = cmd.spawn().map_err(|e| format!("启动 mihomo 失败: {e}"))?;
         log::info!("mihomo 已启动 pid={}", child.id());
         *self.child.lock().unwrap() = Some(child);
+        *self.started.lock().unwrap() = Some(std::time::Instant::now());
         Ok(())
     }
 
@@ -67,6 +69,15 @@ impl CoreManager {
             let _ = c.wait();
             log::info!("mihomo 已停止");
         }
+        *self.started.lock().unwrap() = None;
         Ok(())
+    }
+
+    /// 运行时长(秒),未运行返回 None。
+    pub fn uptime(&self) -> Option<u64> {
+        if !self.is_running() {
+            return None;
+        }
+        self.started.lock().unwrap().map(|t| t.elapsed().as_secs())
     }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Box, Button, Chip, IconButton, Stack, TextField, Tooltip, Typography } from '@mui/material'
+import { Box, Button, Chip, IconButton, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material'
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
 import { api, fmtBytes, openWs } from '../api/controller'
 
@@ -36,6 +36,7 @@ function fmtDur(start: string): string {
 export default function Connections() {
   const [data, setData] = useState<ConnResp | null>(null)
   const [search, setSearch] = useState('')
+  const [sort, setSort] = useState('time')
   const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
@@ -80,17 +81,25 @@ export default function Connections() {
   const allConns = data?.connections ?? []
   const conns = useMemo(() => {
     const q = search.toLowerCase()
-    if (!q) return allConns
-    return allConns.filter((c) => {
-      const m = c.metadata
-      return (
-        (m.host || '').toLowerCase().includes(q) ||
-        (m.destinationIP || '').toLowerCase().includes(q) ||
-        (c.chains?.join(' ') || '').toLowerCase().includes(q) ||
-        (c.rule || '').toLowerCase().includes(q)
-      )
+    const list = q
+      ? allConns.filter((c) => {
+          const m = c.metadata
+          return (
+            (m.host || '').toLowerCase().includes(q) ||
+            (m.destinationIP || '').toLowerCase().includes(q) ||
+            (c.chains?.join(' ') || '').toLowerCase().includes(q) ||
+            (c.rule || '').toLowerCase().includes(q)
+          )
+        })
+      : allConns
+    const arr = [...list]
+    arr.sort((a, b) => {
+      if (sort === 'download') return b.download - a.download
+      if (sort === 'upload') return b.upload - a.upload
+      return Date.parse(b.start) - Date.parse(a.start)
     })
-  }, [allConns, search])
+    return arr
+  }, [allConns, search, sort])
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -105,6 +114,18 @@ export default function Connections() {
           onChange={(e) => setSearch(e.target.value)}
           sx={{ flex: 1, maxWidth: 320 }}
         />
+        <TextField
+          select
+          size="small"
+          label="排序"
+          value={sort}
+          onChange={(e) => setSort(e.target.value)}
+          sx={{ width: 100 }}
+        >
+          <MenuItem value="time">时间</MenuItem>
+          <MenuItem value="download">下载</MenuItem>
+          <MenuItem value="upload">上传</MenuItem>
+        </TextField>
         <Typography color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
           {conns.length}/{allConns.length} · ↑ {fmtBytes(data?.uploadTotal ?? 0)} · ↓ {fmtBytes(data?.downloadTotal ?? 0)}
         </Typography>

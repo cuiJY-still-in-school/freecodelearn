@@ -22,11 +22,19 @@ interface CoreStatus {
   running: boolean
   version: string | null
   present: boolean
+  uptime: number
 }
 interface RuntimeConfig {
   mixed_port: number
   controller: string
   secret: string
+}
+
+function fmtUptime(s: number): string {
+  if (!s) return '—'
+  if (s < 60) return `${s}s`
+  if (s < 3600) return `${Math.floor(s / 60)}m`
+  return `${Math.floor(s / 3600)}h${Math.floor((s % 3600) / 60)}m`
 }
 
 const MODES = [
@@ -129,9 +137,15 @@ export default function Home() {
         }
       })
       .catch(() => {})
+    const statusTimer = setInterval(() => {
+      invoke<CoreStatus>('core_status')
+        .then(setStatus)
+        .catch(() => {})
+    }, 5000)
     return () => {
       alive = false
       sockets.forEach((s) => s.close())
+      clearInterval(statusTimer)
     }
   }, [running])
 
@@ -265,6 +279,9 @@ export default function Home() {
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         连接 {conns}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        运行 {fmtUptime(status?.uptime ?? 0)}
                       </Typography>
                     </Stack>
                   </Stack>
