@@ -12,6 +12,12 @@ pub struct Profile {
     pub name: String,
     pub url: Option<String>,
     pub updated: u64,
+    #[serde(default)]
+    pub used: u64,
+    #[serde(default)]
+    pub total: u64,
+    #[serde(default)]
+    pub expire: u64,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -99,7 +105,35 @@ fn normalize(raw: String) -> String {
     raw
 }
 
-async fn fetch(url: &str) -> Result<String, String> {
+#[derive(Clone, Copy, Default)]
+struct SubInfo {
+    used: u64,
+    total: u64,
+    expire: u64,
+}
+
+fn parse_userinfo(h: &str) -> SubInfo {
+    let (mut up, mut down, mut total, mut expire) = (0u64, 0u64, 0u64, 0u64);
+    for part in h.split(';') {
+        let p = part.trim();
+        if let Some(v) = p.strip_prefix("upload=") {
+            up = v.trim().parse().unwrap_or(0);
+        } else if let Some(v) = p.strip_prefix("download=") {
+            down = v.trim().parse().unwrap_or(0);
+        } else if let Some(v) = p.strip_prefix("total=") {
+            total = v.trim().parse().unwrap_or(0);
+        } else if let Some(v) = p.strip_prefix("expire=") {
+            expire = v.trim().parse().unwrap_or(0);
+        }
+    }
+    SubInfo {
+        used: up + down,
+        total,
+        expire,
+    }
+}
+
+async fn fetch(url: &str) -> Result<(String, SubInfo), String> {
     let client = reqwest::Client::builder()
         .user_agent("clash.meta")
         .build()
@@ -112,11 +146,17 @@ async fn fetch(url: &str) -> Result<String, String> {
     if !resp.status().is_success() {
         return Err(format!("订阅服务器返回 {}", resp.status()));
     }
+    let info = resp
+        .headers()
+        .get("subscription-userinfo")
+        .and_then(|v| v.to_str().ok())
+        .map(parse_userinfo)
+        .unwrap_or_default();
     let text = resp
         .text()
         .await
         .map_err(|e| format!("读取订阅内容失败: {e}"))?;
-    Ok(normalize(text))
+    Ok((normalize(text), info))
 }
 
 fn validate(yaml: &str) -> Result<(), String> {
@@ -129,7 +169,7 @@ pub async fn import_profile(
     name: String,
     url: String,
 ) -> Result<Profile, String> {
-    let yaml = fetch(&url).await?;
+    let (yaml, info) = fetch(&url).await?;
     validate(&yaml)?;
     std::fs::create_dir_all(profiles_dir(&app)?).map_err(|e| format!("创建目录失败: {e}"))?;
     let uid = gen_uid();
@@ -140,6 +180,9 @@ pub async fn import_profile(
         name,
         url: Some(url),
         updated: now(),
+        used: info.used,
+        total: info.total,
+        expire: info.expire,
     };
     idx.profiles.push(prof.clone());
     if idx.active.is_none() {
@@ -179,12 +222,15 @@ pub async fn update_profile(app: tauri::AppHandle, uid: String) -> Result<(), St
             .clone()
             .ok_or_else(|| "该订阅无 URL,无法更新".to_string())?
     };
-    let yaml = fetch(&url).await?;
+    let (yaml, info) = fetch(&url).await?;
     validate(&yaml)?;
     std::fs::write(yaml_path(&app, &uid)?, &yaml).map_err(|e| format!("写入订阅失败: {e}"))?;
     let mut idx = load_index(&app)?;
     if let Some(p) = idx.profiles.iter_mut().find(|p| p.uid == uid) {
         p.updated = now();
+        p.used = info.used;
+        p.total = info.total;
+        p.expire = info.expire;
     }
     save_index(&app, &idx)
 }

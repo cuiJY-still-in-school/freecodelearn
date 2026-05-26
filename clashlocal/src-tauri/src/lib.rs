@@ -6,7 +6,7 @@ use tauri::Manager;
 
 use kernel::process::CoreManager;
 use kernel::profiles::{Profile, ProfileIndex};
-use kernel::{CoreInfo, CONTROLLER_HOST, CONTROLLER_PORT, MIXED_PORT};
+use kernel::{CoreInfo, CONTROLLER_HOST, CONTROLLER_PORT};
 
 #[derive(Serialize)]
 struct RuntimeConfig {
@@ -69,7 +69,7 @@ fn core_status(app: tauri::AppHandle, mgr: tauri::State<CoreManager>) -> CoreSta
 fn get_runtime_config(app: tauri::AppHandle) -> Result<RuntimeConfig, String> {
     let secret = kernel::config::ensure_secret(&app)?;
     Ok(RuntimeConfig {
-        mixed_port: MIXED_PORT,
+        mixed_port: kernel::settings::load(&app).mixed_port,
         controller: format!("{CONTROLLER_HOST}:{CONTROLLER_PORT}"),
         secret,
     })
@@ -79,7 +79,7 @@ fn get_runtime_config(app: tauri::AppHandle) -> Result<RuntimeConfig, String> {
 #[tauri::command]
 fn set_system_proxy(app: tauri::AppHandle, enable: bool) -> Result<(), String> {
     if enable {
-        sysproxy::enable(&app, MIXED_PORT)
+        sysproxy::enable(&app, kernel::settings::load(&app).mixed_port)
     } else {
         sysproxy::disable(&app)
     }
@@ -87,8 +87,42 @@ fn set_system_proxy(app: tauri::AppHandle, enable: bool) -> Result<(), String> {
 
 /// 系统代理是否正指向 clashlocal。
 #[tauri::command]
-fn system_proxy_status() -> bool {
-    sysproxy::is_enabled(MIXED_PORT)
+fn system_proxy_status(app: tauri::AppHandle) -> bool {
+    sysproxy::is_enabled(kernel::settings::load(&app).mixed_port)
+}
+
+/// 当前操作系统:"linux" / "windows" / "macos"。
+#[tauri::command]
+fn os_platform() -> String {
+    std::env::consts::OS.to_string()
+}
+
+/// 本机局域网 IP(给"设备代理填 IP:7893"用)。
+#[tauri::command]
+fn lan_ip() -> Option<String> {
+    kernel::hotspot::lan_ip()
+}
+
+/// 修改混合端口:存设置 → 重启内核 → 若系统代理原指向旧端口则重设到新端口。
+#[tauri::command]
+fn save_mixed_port(
+    app: tauri::AppHandle,
+    mgr: tauri::State<CoreManager>,
+    port: u16,
+) -> Result<(), String> {
+    let mut s = kernel::settings::load(&app);
+    let old = s.mixed_port;
+    let proxy_on = sysproxy::is_enabled(old);
+    s.mixed_port = port;
+    kernel::settings::save(&app, &s)?;
+    if mgr.is_running() {
+        mgr.stop()?;
+        mgr.start(&app)?;
+    }
+    if proxy_on {
+        sysproxy::enable(&app, port)?;
+    }
+    Ok(())
 }
 
 /// 导入订阅(下载 + 存储);若是第一个订阅则自动激活。
@@ -324,6 +358,8 @@ pub fn run() {
             get_runtime_config,
             set_system_proxy,
             system_proxy_status,
+            os_platform,
+            lan_ip,
             import_profile,
             list_profiles,
             activate_profile,
@@ -336,7 +372,8 @@ pub fn run() {
             hotspot_status,
             list_wifi_devices,
             set_transparent,
-            set_auto_start_core
+            set_auto_start_core,
+            save_mixed_port
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -346,7 +383,8 @@ pub fn run() {
                 if let Some(mgr) = app_handle.try_state::<CoreManager>() {
                     let _ = mgr.stop();
                 }
-                if sysproxy::is_enabled(MIXED_PORT) {
+                let port = kernel::settings::load(app_handle).mixed_port;
+                if sysproxy::is_enabled(port) {
                     let _ = sysproxy::disable(app_handle);
                 }
                 let _ = kernel::hotspot::stop();

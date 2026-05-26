@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { fmtBytes } from '../api/controller'
 import {
   Alert,
   Box,
@@ -22,10 +23,22 @@ interface Profile {
   name: string
   url: string | null
   updated: number
+  used: number
+  total: number
+  expire: number
 }
 interface ProfileIndex {
   profiles: Profile[]
   active: string | null
+}
+
+function relTime(sec: number): string {
+  if (!sec) return ''
+  const d = Math.max(0, Math.floor(Date.now() / 1000 - sec))
+  if (d < 60) return '刚刚'
+  if (d < 3600) return `${Math.floor(d / 60)} 分钟前`
+  if (d < 86400) return `${Math.floor(d / 3600)} 小时前`
+  return `${Math.floor(d / 86400)} 天前`
 }
 
 export default function Profiles() {
@@ -133,8 +146,15 @@ export default function Profiles() {
                   color="text.secondary"
                   sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                 >
-                  {p.url}
+                  {p.url || '本地配置'}
+                  {p.updated ? ` · 更新于 ${relTime(p.updated)}` : ''}
                 </Typography>
+                {p.total > 0 && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    流量 {fmtBytes(p.used)} / {fmtBytes(p.total)}
+                    {p.expire > 0 ? ` · 到期 ${new Date(p.expire * 1000).toLocaleDateString()}` : ''}
+                  </Typography>
+                )}
               </Box>
               {idx.active !== p.uid && (
                 <Button size="small" onClick={() => run(() => invoke('activate_profile', { uid: p.uid }))} disabled={busy}>

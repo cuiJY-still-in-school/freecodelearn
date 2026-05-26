@@ -10,8 +10,6 @@ use serde::Serialize;
 use std::path::PathBuf;
 use tauri::Manager;
 
-/// mixed-port:本机系统代理 + 局域网设备共用(避开本机已占用的 7890/7897)。
-pub const MIXED_PORT: u16 = 7893;
 pub const CONTROLLER_HOST: &str = "127.0.0.1";
 pub const CONTROLLER_PORT: u16 = 9091;
 /// 透明代理用的 tproxy 端口与 fake-ip DNS 端口(热点设备零配置走 VPN,TCP+UDP)。

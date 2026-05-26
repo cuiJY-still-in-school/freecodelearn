@@ -16,6 +16,7 @@ import {
   Typography,
 } from '@mui/material'
 import { api, fmtBytes, openWs } from '../api/controller'
+import TrafficChart from '../components/TrafficChart'
 
 interface CoreStatus {
   running: boolean
@@ -43,17 +44,21 @@ export default function Home() {
   const [mode, setMode] = useState('rule')
   const [traffic, setTraffic] = useState({ up: 0, down: 0 })
   const [mem, setMem] = useState(0)
+  const [lanIp, setLanIp] = useState<string | null>(null)
+  const [history, setHistory] = useState<{ up: number; down: number }[]>([])
 
   const refresh = useCallback(async () => {
     try {
-      const [s, r, sp] = await Promise.all([
+      const [s, r, sp, ip] = await Promise.all([
         invoke<CoreStatus>('core_status'),
         invoke<RuntimeConfig>('get_runtime_config'),
         invoke<boolean>('system_proxy_status'),
+        invoke<string | null>('lan_ip'),
       ])
       setStatus(s)
       setRt(r)
       setSysProxy(sp)
+      setLanIp(ip)
     } catch (e) {
       setErr(String(e))
     }
@@ -71,6 +76,7 @@ export default function Home() {
     if (!running) {
       setTraffic({ up: 0, down: 0 })
       setMem(0)
+      setHistory([])
       return
     }
     let alive = true
@@ -86,7 +92,9 @@ export default function Home() {
         sockets.push(ws)
         ws.onmessage = (e) => {
           try {
-            setTraffic(JSON.parse(e.data))
+            const t = JSON.parse(e.data)
+            setTraffic(t)
+            setHistory((h) => [...h.slice(-59), { up: t.up || 0, down: t.down || 0 }])
           } catch {
             /* ignore */
           }
@@ -242,6 +250,17 @@ export default function Home() {
                       </Typography>
                     </Stack>
                   </Stack>
+                  <Box sx={{ mt: 1.5 }}>
+                    <Stack direction="row" spacing={2} sx={{ mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: '#38d39f' }}>
+                        ● 下载
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#6172ff' }}>
+                        ● 上传
+                      </Typography>
+                    </Stack>
+                    <TrafficChart data={history} />
+                  </Box>
                 </>
               )}
 
@@ -280,7 +299,7 @@ export default function Home() {
                 局域网共享
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                局域网设备把 HTTP/SOCKS 代理设为「本机IP:{port}」即可走 VPN。一键 WiFi 热点见「热点」页。
+                同一 WiFi/网络下的设备,把 HTTP/SOCKS 代理设为「{lanIp ?? '本机IP'}:{port}」即可走 VPN,无需热点。
               </Typography>
             </CardContent>
           </Card>

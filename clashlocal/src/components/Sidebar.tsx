@@ -8,6 +8,7 @@ import HubRoundedIcon from '@mui/icons-material/HubRounded'
 import SubjectRoundedIcon from '@mui/icons-material/SubjectRounded'
 import WifiTetheringRoundedIcon from '@mui/icons-material/WifiTetheringRounded'
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded'
+import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded'
 
 export interface NavEntry {
   key: string
@@ -22,6 +23,7 @@ export const NAV: NavEntry[] = [
   { key: 'rules', label: '规则', icon: <ArticleRoundedIcon /> },
   { key: 'connections', label: '连接', icon: <HubRoundedIcon /> },
   { key: 'logs', label: '日志', icon: <SubjectRoundedIcon /> },
+  { key: 'dashboard', label: '仪表盘', icon: <DashboardRoundedIcon /> },
   { key: 'hotspot', label: '热点', icon: <WifiTetheringRoundedIcon /> },
   { key: 'settings', label: '设置', icon: <SettingsRoundedIcon /> },
 ]
@@ -37,7 +39,7 @@ export default function Sidebar({ active, onChange }: Props) {
       sx={{
         width: 220,
         flexShrink: 0,
-        bgcolor: '#161922',
+        bgcolor: 'background.paper',
         borderRight: '1px solid',
         borderColor: 'divider',
         display: 'flex',

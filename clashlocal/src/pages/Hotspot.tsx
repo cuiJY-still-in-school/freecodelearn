@@ -40,6 +40,7 @@ export default function Hotspot() {
   const [band, setBand] = useState('')
   const [devices, setDevices] = useState<string[]>([])
   const [transparent, setTransparent] = useState(false)
+  const [platform, setPlatform] = useState('linux')
   const [status, setStatus] = useState<HotspotStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -54,6 +55,7 @@ export default function Hotspot() {
       setTransparent(s.transparent)
       setStatus(await invoke<HotspotStatus>('hotspot_status'))
       setDevices(await invoke<string[]>('list_wifi_devices'))
+      setPlatform(await invoke<string>('os_platform'))
     } catch (e) {
       setErr(String(e))
     }
@@ -64,6 +66,7 @@ export default function Hotspot() {
   }, [refresh])
 
   const active = status?.active ?? false
+  const isLinux = platform === 'linux'
   const ifOptions = devices.length ? Array.from(new Set([ifname, ...devices])) : [ifname]
 
   const toggleHotspot = async () => {
@@ -231,10 +234,16 @@ export default function Hotspot() {
                   透明代理
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  开启后,连入热点的设备无需任何配置,全部 TCP/UDP 流量自动走 VPN(nft TPROXY + setcap,需 root 授权)。
+                  {isLinux
+                    ? '开启后,连入热点的设备无需任何配置,全部 TCP/UDP 流量自动走 VPN(nft TPROXY + setcap,需 root 授权)。'
+                    : '透明代理仅支持 Linux。本平台请用代理模式:设备手动把代理设为「网关IP:7893」。'}
                 </Typography>
               </Box>
-              <Switch checked={transparent} onChange={(e) => toggleTransparent(e.target.checked)} disabled={busy} />
+              <Switch
+                checked={transparent}
+                onChange={(e) => toggleTransparent(e.target.checked)}
+                disabled={busy || !isLinux}
+              />
             </Stack>
           </CardContent>
         </Card>

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Box, Button, Card, CardContent, Chip, Stack, Typography } from '@mui/material'
+import { Alert, Box, Button, Card, CardContent, Chip, IconButton, Stack, Typography } from '@mui/material'
 import SpeedRoundedIcon from '@mui/icons-material/SpeedRounded'
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded'
+import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded'
 import { api } from '../api/controller'
 
 interface ProxyNode {
@@ -15,7 +17,7 @@ interface ProxiesResp {
 }
 
 const GROUP_TYPES = ['Selector', 'URLTest', 'Fallback', 'LoadBalance', 'Relay']
-const TEST_URL = 'http://www.gstatic.com/generate_204'
+const testUrl = () => localStorage.getItem('clash-test-url') || 'http://www.gstatic.com/generate_204'
 
 function delayColor(d?: number): 'success' | 'warning' | 'error' | 'default' {
   if (d == null) return 'default'
@@ -43,6 +45,8 @@ export default function Proxies() {
     refresh()
   }, [refresh])
 
+  const [sortDelay, setSortDelay] = useState(false)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const groups = Object.values(proxies).filter((p) => GROUP_TYPES.includes(p.type) && p.all)
 
   const select = async (group: string, node: string) => {
@@ -62,13 +66,17 @@ export default function Proxies() {
     const h = proxies[name]?.history
     return h && h.length ? h[h.length - 1].delay : undefined
   }
+  const delayVal = (name: string) => {
+    const d = lastDelay(name)
+    return d && d > 0 ? d : 1e9
+  }
 
   const testGroup = async (g: ProxyNode) => {
     setTesting(g.name)
     try {
       await Promise.all(
         (g.all || []).map((n) =>
-          api(`/proxies/${encodeURIComponent(n)}/delay?url=${encodeURIComponent(TEST_URL)}&timeout=5000`).catch(
+          api(`/proxies/${encodeURIComponent(n)}/delay?url=${encodeURIComponent(testUrl())}&timeout=5000`).catch(
             () => {},
           ),
         ),
@@ -105,23 +113,42 @@ export default function Proxies() {
           <Card key={g.name}>
             <CardContent>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                <Box>
-                  <Typography sx={{ fontWeight: 600 }}>{g.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {g.type} · 当前 {g.now ?? '—'}
-                  </Typography>
-                </Box>
-                <Button
-                  size="small"
-                  startIcon={<SpeedRoundedIcon />}
-                  onClick={() => testGroup(g)}
-                  disabled={testing === g.name}
-                >
-                  {testing === g.name ? '测速中…' : '测延迟'}
-                </Button>
+                <Stack direction="row" sx={{ alignItems: 'center', minWidth: 0 }}>
+                  <IconButton
+                    size="small"
+                    sx={{ mr: 0.5 }}
+                    onClick={() => setCollapsed((c) => ({ ...c, [g.name]: !c[g.name] }))}
+                  >
+                    {collapsed[g.name] ? <ExpandMoreRoundedIcon /> : <ExpandLessRoundedIcon />}
+                  </IconButton>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 600 }}>{g.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {g.type} · {g.all?.length ?? 0} 节点 · 当前 {g.now ?? '—'}
+                    </Typography>
+                  </Box>
+                </Stack>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    size="small"
+                    variant={sortDelay ? 'contained' : 'text'}
+                    onClick={() => setSortDelay((s) => !s)}
+                  >
+                    按延迟排序
+                  </Button>
+                  <Button
+                    size="small"
+                    startIcon={<SpeedRoundedIcon />}
+                    onClick={() => testGroup(g)}
+                    disabled={testing === g.name}
+                  >
+                    {testing === g.name ? '测速中…' : '测延迟'}
+                  </Button>
+                </Stack>
               </Stack>
+              {!collapsed[g.name] && (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {(g.all || []).map((n) => {
+                {(sortDelay ? [...(g.all || [])].sort((a, b) => delayVal(a) - delayVal(b)) : g.all || []).map((n) => {
                   const d = lastDelay(n)
                   const selected = g.now === n
                   return (
@@ -136,6 +163,7 @@ export default function Proxies() {
                   )
                 })}
               </Box>
+              )}
             </CardContent>
           </Card>
         ))}

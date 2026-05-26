@@ -39,15 +39,21 @@ impl CoreManager {
         let log = std::fs::File::create(dir.join("mihomo.log"))
             .map_err(|e| format!("创建内核日志失败: {e}"))?;
         let log_err = log.try_clone().map_err(|e| format!("日志句柄复制失败: {e}"))?;
-        let child = Command::new(&bin)
-            .arg("-d")
+        let mut cmd = Command::new(&bin);
+        cmd.arg("-d")
             .arg(&dir)
             .arg("-f")
             .arg(&cfg)
             .stdout(Stdio::from(log))
-            .stderr(Stdio::from(log_err))
-            .spawn()
-            .map_err(|e| format!("启动 mihomo 失败: {e}"))?;
+            .stderr(Stdio::from(log_err));
+        // Windows:隐藏 mihomo 的控制台黑窗
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        let child = cmd.spawn().map_err(|e| format!("启动 mihomo 失败: {e}"))?;
         log::info!("mihomo 已启动 pid={}", child.id());
         *self.child.lock().unwrap() = Some(child);
         Ok(())

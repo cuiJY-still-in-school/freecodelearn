@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { Box, Button, Chip, Stack, Typography } from '@mui/material'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Box, Button, Chip, IconButton, Stack, TextField, Tooltip, Typography } from '@mui/material'
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
 import { api, fmtBytes, openWs } from '../api/controller'
 
 interface Conn {
@@ -15,6 +16,7 @@ interface Conn {
   download: number
   chains: string[]
   rule: string
+  start: string
 }
 interface ConnResp {
   downloadTotal: number
@@ -22,8 +24,18 @@ interface ConnResp {
   connections: Conn[] | null
 }
 
+function fmtDur(start: string): string {
+  const t = Date.parse(start)
+  if (!t) return ''
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000))
+  if (s < 60) return `${s}s`
+  if (s < 3600) return `${Math.floor(s / 60)}m`
+  return `${(s / 3600).toFixed(1)}h`
+}
+
 export default function Connections() {
   const [data, setData] = useState<ConnResp | null>(null)
+  const [search, setSearch] = useState('')
   const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
@@ -57,8 +69,28 @@ export default function Connections() {
       /* ignore */
     }
   }
+  const closeOne = async (id: string) => {
+    try {
+      await api(`/connections/${id}`, { method: 'DELETE' })
+    } catch {
+      /* ignore */
+    }
+  }
 
-  const conns = data?.connections ?? []
+  const allConns = data?.connections ?? []
+  const conns = useMemo(() => {
+    const q = search.toLowerCase()
+    if (!q) return allConns
+    return allConns.filter((c) => {
+      const m = c.metadata
+      return (
+        (m.host || '').toLowerCase().includes(q) ||
+        (m.destinationIP || '').toLowerCase().includes(q) ||
+        (c.chains?.join(' ') || '').toLowerCase().includes(q) ||
+        (c.rule || '').toLowerCase().includes(q)
+      )
+    })
+  }, [allConns, search])
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -66,10 +98,17 @@ export default function Connections() {
         连接
       </Typography>
       <Stack direction="row" sx={{ alignItems: 'center', gap: 2, my: 2 }}>
-        <Typography color="text.secondary">
-          活动 {conns.length} · 总 ↑ {fmtBytes(data?.uploadTotal ?? 0)} · ↓ {fmtBytes(data?.downloadTotal ?? 0)}
+        <TextField
+          size="small"
+          label="搜索(域名/IP/规则/节点)"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          sx={{ flex: 1, maxWidth: 320 }}
+        />
+        <Typography color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+          {conns.length}/{allConns.length} · ↑ {fmtBytes(data?.uploadTotal ?? 0)} · ↓ {fmtBytes(data?.downloadTotal ?? 0)}
         </Typography>
-        <Button size="small" color="error" onClick={closeAll} disabled={!conns.length}>
+        <Button size="small" color="error" onClick={closeAll} disabled={!allConns.length}>
           全部断开
         </Button>
       </Stack>
@@ -86,16 +125,21 @@ export default function Connections() {
                 borderColor: 'divider',
               }}
             >
-              <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
+              <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1, alignItems: 'center' }}>
                 <Typography
                   variant="body2"
-                  sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}
                 >
                   {c.metadata.host || c.metadata.destinationIP}:{c.metadata.destinationPort}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
-                  ↑ {fmtBytes(c.upload)} ↓ {fmtBytes(c.download)}
+                  {fmtDur(c.start)} · ↑ {fmtBytes(c.upload)} ↓ {fmtBytes(c.download)}
                 </Typography>
+                <Tooltip title="断开">
+                  <IconButton size="small" onClick={() => closeOne(c.id)} sx={{ flexShrink: 0 }}>
+                    <CloseRoundedIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
               </Stack>
               <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: 'wrap' }}>
                 <Chip size="small" label={c.metadata.network} />
@@ -103,7 +147,7 @@ export default function Connections() {
               </Stack>
             </Box>
           ))}
-          {!conns.length && (
+          {!allConns.length && (
             <Typography color="text.secondary">暂无活动连接(内核需在运行)。</Typography>
           )}
         </Stack>

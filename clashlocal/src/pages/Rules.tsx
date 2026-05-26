@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Box, Chip, Stack, Typography } from '@mui/material'
+import { useEffect, useMemo, useState } from 'react'
+import { Box, Chip, Stack, TextField, Typography } from '@mui/material'
 import { api } from '../api/controller'
 
 interface Rule {
@@ -10,6 +10,7 @@ interface Rule {
 
 export default function Rules() {
   const [rules, setRules] = useState<Rule[]>([])
+  const [search, setSearch] = useState('')
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
@@ -18,21 +19,41 @@ export default function Rules() {
       .catch((e) => setErr(String(e)))
   }, [])
 
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase()
+    return rules.filter(
+      (r) =>
+        !q ||
+        r.payload.toLowerCase().includes(q) ||
+        r.proxy.toLowerCase().includes(q) ||
+        r.type.toLowerCase().includes(q),
+    )
+  }, [rules, search])
+
   return (
     <Box>
       <Typography variant="h5" sx={{ fontWeight: 700 }}>
         规则
       </Typography>
-      <Typography color="text.secondary" sx={{ mb: 2 }}>
-        {rules.length} 条
-      </Typography>
+      <Stack direction="row" spacing={2} sx={{ my: 2, alignItems: 'center' }}>
+        <TextField
+          size="small"
+          label="搜索规则"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          sx={{ flex: 1, maxWidth: 360 }}
+        />
+        <Typography color="text.secondary">
+          {filtered.length} / {rules.length} 条
+        </Typography>
+      </Stack>
       {err && (
         <Typography color="error.main" sx={{ mb: 2 }}>
           {err}
         </Typography>
       )}
       <Stack spacing={0.5}>
-        {rules.slice(0, 1000).map((r, i) => (
+        {filtered.slice(0, 1000).map((r, i) => (
           <Stack key={i} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Chip size="small" label={r.type} sx={{ width: 140, justifyContent: 'flex-start', flexShrink: 0 }} />
             <Typography

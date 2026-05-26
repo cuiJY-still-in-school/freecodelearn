@@ -12,12 +12,18 @@ fn d_pass() -> String {
 fn d_ifname() -> String {
     "wlan0".into()
 }
+fn d_port() -> u16 {
+    7893
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Settings {
     /// 透明代理(让热点设备自动走 VPN)。开启会给内核加 tproxy-port + fake-ip dns。
     #[serde(default)]
     pub transparent: bool,
+    /// 混合端口(系统代理 + 局域网共享共用)。
+    #[serde(default = "d_port")]
+    pub mixed_port: u16,
     #[serde(default = "d_ssid")]
     pub hotspot_ssid: String,
     #[serde(default = "d_pass")]
@@ -37,6 +43,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             transparent: false,
+            mixed_port: d_port(),
             hotspot_ssid: d_ssid(),
             hotspot_password: d_pass(),
             hotspot_ifname: d_ifname(),

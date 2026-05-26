@@ -1,10 +1,24 @@
 import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { disable as autoDisable, enable as autoEnable, isEnabled as autoIsEnabled } from '@tauri-apps/plugin-autostart'
-import { Alert, Box, Card, CardContent, Divider, Stack, Switch, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Divider,
+  Stack,
+  Switch,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from '@mui/material'
 
 interface AppSettings {
   auto_start_core: boolean
+  mixed_port: number
 }
 
 function Row({
@@ -35,6 +49,49 @@ export default function Settings() {
   const [autostart, setAutostart] = useState(false)
   const [autoCore, setAutoCore] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [themeMode, setThemeMode] = useState<string>(() => localStorage.getItem('theme-mode') || 'system')
+  const [coreVer, setCoreVer] = useState<string | null>(null)
+  const [testUrl, setTestUrl] = useState(
+    () => localStorage.getItem('clash-test-url') || 'http://www.gstatic.com/generate_204',
+  )
+  const [busy, setBusy] = useState(false)
+  const [port, setPort] = useState(7893)
+
+  const restartCore = async () => {
+    setBusy(true)
+    setErr(null)
+    try {
+      await invoke('restart_core')
+    } catch (e) {
+      setErr(String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const saveTestUrl = (v: string) => {
+    setTestUrl(v)
+    localStorage.setItem('clash-test-url', v)
+  }
+
+  const savePort = async () => {
+    setBusy(true)
+    setErr(null)
+    try {
+      await invoke('save_mixed_port', { port })
+    } catch (e) {
+      setErr(String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const changeTheme = (v: string | null) => {
+    if (!v) return
+    localStorage.setItem('theme-mode', v)
+    setThemeMode(v)
+    window.dispatchEvent(new Event('thememode'))
+  }
 
   useEffect(() => {
     ;(async () => {
@@ -42,6 +99,9 @@ export default function Settings() {
         setAutostart(await autoIsEnabled())
         const s = await invoke<AppSettings>('get_settings')
         setAutoCore(s.auto_start_core)
+        setPort(s.mixed_port || 7893)
+        const cs = await invoke<{ version: string | null }>('core_status')
+        setCoreVer(cs.version)
       } catch (e) {
         setErr(String(e))
       }
@@ -99,6 +159,66 @@ export default function Settings() {
             checked={autoCore}
             onChange={toggleAutoCore}
           />
+        </CardContent>
+      </Card>
+
+      <Card sx={{ maxWidth: 680, mt: 2 }}>
+        <CardContent>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box>
+              <Typography>主题</Typography>
+              <Typography variant="body2" color="text.secondary">
+                外观模式
+              </Typography>
+            </Box>
+            <ToggleButtonGroup size="small" exclusive value={themeMode} onChange={(_, v) => changeTheme(v)}>
+              <ToggleButton value="system">跟随系统</ToggleButton>
+              <ToggleButton value="light">浅色</ToggleButton>
+              <ToggleButton value="dark">深色</ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card sx={{ maxWidth: 680, mt: 2 }}>
+        <CardContent>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box>
+              <Typography>内核</Typography>
+              <Typography variant="body2" color="text.secondary">
+                mihomo {coreVer ?? '未运行 / 未知'}
+              </Typography>
+            </Box>
+            <Button size="small" variant="outlined" onClick={restartCore} disabled={busy}>
+              重启内核
+            </Button>
+          </Stack>
+          <Divider sx={{ my: 1.5 }} />
+          <Typography sx={{ mb: 1 }}>测速 URL</Typography>
+          <TextField
+            fullWidth
+            size="small"
+            value={testUrl}
+            onChange={(e) => saveTestUrl(e.target.value)}
+            helperText="代理页「测延迟」使用此地址"
+          />
+          <Divider sx={{ my: 1.5 }} />
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Typography sx={{ flex: 1 }}>混合端口</Typography>
+            <TextField
+              size="small"
+              type="number"
+              value={port}
+              onChange={(e) => setPort(Number(e.target.value) || 0)}
+              sx={{ width: 120 }}
+            />
+            <Button size="small" variant="outlined" onClick={savePort} disabled={busy}>
+              应用
+            </Button>
+          </Stack>
+          <Typography variant="caption" color="text.secondary">
+            系统代理 + 局域网共享共用端口(修改后会重启内核)
+          </Typography>
         </CardContent>
       </Card>
 

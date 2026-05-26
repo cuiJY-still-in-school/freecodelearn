@@ -5,7 +5,7 @@ use serde_yaml::{Mapping, Value};
 use tauri::Manager;
 
 use crate::kernel::{
-    profiles, settings, CONTROLLER_HOST, CONTROLLER_PORT, DNS_PORT, MIXED_PORT, TPROXY_PORT,
+    profiles, settings, CONTROLLER_HOST, CONTROLLER_PORT, DNS_PORT, TPROXY_PORT,
 };
 
 /// mihomo 工作目录(geoip 缓存、日志等):<app_data>/run
@@ -56,6 +56,7 @@ pub fn write_config(app: &tauri::AppHandle) -> Result<(PathBuf, String), String>
     let dir = run_dir(app)?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("创建 run 目录失败: {e}"))?;
     let secret = ensure_secret(app)?;
+    let st = settings::load(app);
 
     let mut doc: Value = match profiles::active_profile_yaml(app)? {
         Some(raw) => serde_yaml::from_str(&raw).map_err(|e| format!("解析订阅失败: {e}"))?,
@@ -67,7 +68,7 @@ pub fn write_config(app: &tauri::AppHandle) -> Result<(PathBuf, String), String>
     let map = doc.as_mapping_mut().unwrap();
 
     // 强制覆盖的控制项(无论订阅里写了什么)
-    put(map, "mixed-port", Value::from(MIXED_PORT as u64));
+    put(map, "mixed-port", Value::from(st.mixed_port as u64));
     put(map, "allow-lan", Value::from(true));
     put(map, "bind-address", Value::from("*"));
     put(
@@ -77,6 +78,13 @@ pub fn write_config(app: &tauri::AppHandle) -> Result<(PathBuf, String), String>
     );
     put(map, "secret", Value::from(secret.clone()));
     put(map, "ipv6", Value::from(false));
+    // 内置 metacubexd 面板:mihomo 首次启动自动下载,served 于 /ui/
+    put(map, "external-ui", Value::from("ui"));
+    put(
+        map,
+        "external-ui-url",
+        Value::from("https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip"),
+    );
     if map.get("mode").is_none() {
         put(map, "mode", Value::from("rule"));
     }
@@ -85,10 +93,10 @@ pub fn write_config(app: &tauri::AppHandle) -> Result<(PathBuf, String), String>
     }
 
     // 透明代理模式:加 tproxy-port + fake-ip DNS(热点设备零配置走 VPN)
-    if settings::load(app).transparent {
+    if st.transparent {
         put(map, "tproxy-port", Value::from(TPROXY_PORT as u64));
         let dns: Value = serde_yaml::from_str(&format!(
-            "enable: true\nlisten: 0.0.0.0:{dns}\nenhanced-mode: fake-ip\nfake-ip-range: 28.0.0.1/8\nnameserver:\n  - 223.5.5.5\n  - 8.8.8.8\n",
+            "enable: true\nlisten: 0.0.0.0:{dns}\nenhanced-mode: fake-ip\nfake-ip-range: 198.19.0.1/16\nnameserver:\n  - 223.5.5.5\n  - 8.8.8.8\n",
             dns = DNS_PORT
         ))
         .map_err(|e| e.to_string())?;
