@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Box, Button, Card, CardContent, Chip, IconButton, Stack, Typography } from '@mui/material'
+import { Alert, Box, Button, Card, CardContent, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material'
 import SpeedRoundedIcon from '@mui/icons-material/SpeedRounded'
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded'
 import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded'
@@ -152,14 +152,15 @@ export default function Proxies() {
                   const d = lastDelay(n)
                   const selected = g.now === n
                   return (
-                    <Chip
-                      key={n}
-                      label={d != null && d > 0 ? `${n} · ${d}ms` : n}
-                      onClick={() => select(g.name, n)}
-                      color={selected ? 'primary' : delayColor(d)}
-                      variant={selected ? 'filled' : 'outlined'}
-                      size="small"
-                    />
+                    <Tooltip key={n} title={proxies[n]?.type || ''} placement="top">
+                      <Chip
+                        label={d != null && d > 0 ? `${n} · ${d}ms` : n}
+                        onClick={() => select(g.name, n)}
+                        color={selected ? 'primary' : delayColor(d)}
+                        variant={selected ? 'filled' : 'outlined'}
+                        size="small"
+                      />
+                    </Tooltip>
                   )
                 })}
               </Box>

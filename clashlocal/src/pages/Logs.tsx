@@ -12,6 +12,7 @@ import {
 import PauseRoundedIcon from '@mui/icons-material/PauseRounded'
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded'
 import ClearAllRoundedIcon from '@mui/icons-material/ClearAllRounded'
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded'
 import { openWs } from '../api/controller'
 
 interface LogMsg {
@@ -111,6 +112,15 @@ export default function Logs() {
         <Tooltip title={paused ? '继续' : '暂停'}>
           <IconButton onClick={() => setPaused((p) => !p)}>
             {paused ? <PlayArrowRoundedIcon /> : <PauseRoundedIcon />}
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="复制">
+          <IconButton
+            onClick={() =>
+              navigator.clipboard.writeText(filtered.map((l) => `[${l.type}] ${l.payload}`).join('\n'))
+            }
+          >
+            <ContentCopyRoundedIcon />
           </IconButton>
         </Tooltip>
         <Tooltip title="清空">
