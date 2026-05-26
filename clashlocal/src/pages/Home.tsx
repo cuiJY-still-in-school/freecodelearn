@@ -43,6 +43,21 @@ const MODES = [
   { v: 'direct', label: '直连' },
 ]
 
+function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <Card sx={{ flex: '1 1 140px', minWidth: 128 }}>
+      <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+        <Typography variant="caption" color="text.secondary">
+          {label}
+        </Typography>
+        <Typography variant="h6" sx={{ color: color || 'text.primary', fontWeight: 600, lineHeight: 1.25 }}>
+          {value}
+        </Typography>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function Home() {
   const [status, setStatus] = useState<CoreStatus | null>(null)
   const [rt, setRt] = useState<RuntimeConfig | null>(null)
@@ -80,7 +95,7 @@ export default function Home() {
   const running = status?.running ?? false
   const port = rt?.mixed_port ?? 7893
 
-  // 内核运行时:取当前模式 + 订阅实时流量/内存
+  // 内核运行时:取当前模式 + 订阅实时流量/内存/连接
   useEffect(() => {
     if (!running) {
       setTraffic({ up: 0, down: 0 })
@@ -211,7 +226,7 @@ export default function Home() {
       </Typography>
 
       {err && (
-        <Alert severity="error" sx={{ mb: 2, maxWidth: 680 }} onClose={() => setErr(null)}>
+        <Alert severity="error" sx={{ mb: 2, maxWidth: 920 }} onClose={() => setErr(null)}>
           {err}
         </Alert>
       )}
@@ -228,10 +243,14 @@ export default function Home() {
           </CardContent>
         </Card>
       ) : (
-        <Stack spacing={2} sx={{ maxWidth: 680 }}>
-          <Card>
+        <Box sx={{ maxWidth: 920 }}>
+          {/* 内核控制 */}
+          <Card sx={{ mb: 2 }}>
             <CardContent>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <Stack
+                direction="row"
+                sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}
+              >
                 <Box>
                   <Typography variant="overline" color="text.secondary">
                     内核
@@ -240,65 +259,27 @@ export default function Home() {
                     {running ? '● 运行中' : '○ 已停止'}
                   </Typography>
                 </Box>
-                <Button
-                  variant={running ? 'outlined' : 'contained'}
-                  color={running ? 'error' : 'primary'}
-                  onClick={toggleCore}
-                  disabled={busy}
-                  sx={{ minWidth: 96 }}
-                >
-                  {busy ? <CircularProgress size={20} color="inherit" /> : running ? '停止' : '启动'}
-                </Button>
-              </Stack>
-
-              {running && (
-                <>
-                  <Divider sx={{ my: 2 }} />
-                  <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                    <ToggleButtonGroup
-                      size="small"
-                      exclusive
-                      value={mode}
-                      onChange={(_, m) => changeMode(m)}
-                    >
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                  {running && (
+                    <ToggleButtonGroup size="small" exclusive value={mode} onChange={(_, m) => changeMode(m)}>
                       {MODES.map((m) => (
                         <ToggleButton key={m.v} value={m.v} sx={{ px: 2 }}>
                           {m.label}
                         </ToggleButton>
                       ))}
                     </ToggleButtonGroup>
-                    <Stack direction="row" spacing={2}>
-                      <Typography variant="body2" color="text.secondary">
-                        ↑ {fmtBytes(traffic.up)}/s
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        ↓ {fmtBytes(traffic.down)}/s
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        内存 {fmtBytes(mem)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        连接 {conns}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        运行 {fmtUptime(status?.uptime ?? 0)}
-                      </Typography>
-                    </Stack>
-                  </Stack>
-                  <Box sx={{ mt: 1.5 }}>
-                    <Stack direction="row" spacing={2} sx={{ mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ color: '#38d39f' }}>
-                        ● 下载
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: '#6172ff' }}>
-                        ● 上传
-                      </Typography>
-                    </Stack>
-                    <TrafficChart data={history} />
-                  </Box>
-                </>
-              )}
-
+                  )}
+                  <Button
+                    variant={running ? 'outlined' : 'contained'}
+                    color={running ? 'error' : 'primary'}
+                    onClick={toggleCore}
+                    disabled={busy}
+                    sx={{ minWidth: 96 }}
+                  >
+                    {busy ? <CircularProgress size={20} color="inherit" /> : running ? '停止' : '启动'}
+                  </Button>
+                </Stack>
+              </Stack>
               <Divider sx={{ my: 2 }} />
               <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
                 <Chip size="small" label={`版本 ${status?.version ?? '—'}`} />
@@ -308,7 +289,37 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card>
+          {/* 统计磁贴 + 流量图 */}
+          {running && (
+            <>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
+                <StatCard label="下载" value={`${fmtBytes(traffic.down)}/s`} color="#38d39f" />
+                <StatCard label="上传" value={`${fmtBytes(traffic.up)}/s`} color="#6172ff" />
+                <StatCard label="内存" value={fmtBytes(mem)} />
+                <StatCard label="连接" value={String(conns)} />
+                <StatCard label="运行" value={fmtUptime(status?.uptime ?? 0)} />
+              </Box>
+              <Card sx={{ mb: 2 }}>
+                <CardContent>
+                  <Stack direction="row" spacing={2} sx={{ mb: 1, alignItems: 'center' }}>
+                    <Typography variant="overline" color="text.secondary">
+                      实时流量
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#38d39f' }}>
+                      ● 下载
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#6172ff' }}>
+                      ● 上传
+                    </Typography>
+                  </Stack>
+                  <TrafficChart data={history} />
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* 系统代理 */}
+          <Card sx={{ mb: 2 }}>
             <CardContent>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box sx={{ pr: 2 }}>
@@ -328,6 +339,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
+          {/* 局域网共享 */}
           <Card>
             <CardContent>
               <Typography variant="overline" color="text.secondary">
@@ -338,7 +350,7 @@ export default function Home() {
               </Typography>
             </CardContent>
           </Card>
-        </Stack>
+        </Box>
       )}
     </Box>
   )
