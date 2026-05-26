@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Box, Button, Card, CardContent, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material'
+import { Alert, Box, Button, Card, CardContent, IconButton, Stack, Typography } from '@mui/material'
 import SpeedRoundedIcon from '@mui/icons-material/SpeedRounded'
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded'
 import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded'
@@ -19,12 +19,12 @@ interface ProxiesResp {
 const GROUP_TYPES = ['Selector', 'URLTest', 'Fallback', 'LoadBalance', 'Relay']
 const testUrl = () => localStorage.getItem('clash-test-url') || 'http://www.gstatic.com/generate_204'
 
-function delayColor(d?: number): 'success' | 'warning' | 'error' | 'default' {
-  if (d == null) return 'default'
-  if (d <= 0) return 'error'
-  if (d < 200) return 'success'
-  if (d < 500) return 'warning'
-  return 'error'
+function delayHex(d?: number): string {
+  if (d == null) return 'text.secondary'
+  if (d <= 0) return '#ff6b6b'
+  if (d < 200) return '#38d39f'
+  if (d < 500) return '#f5a623'
+  return '#ff6b6b'
 }
 
 export default function Proxies() {
@@ -147,20 +147,40 @@ export default function Proxies() {
                 </Stack>
               </Stack>
               {!collapsed[g.name] && (
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
                 {(sortDelay ? [...(g.all || [])].sort((a, b) => delayVal(a) - delayVal(b)) : g.all || []).map((n) => {
                   const d = lastDelay(n)
                   const selected = g.now === n
                   return (
-                    <Tooltip key={n} title={proxies[n]?.type || ''} placement="top">
-                      <Chip
-                        label={d != null && d > 0 ? `${n} · ${d}ms` : n}
-                        onClick={() => select(g.name, n)}
-                        color={selected ? 'primary' : delayColor(d)}
-                        variant={selected ? 'filled' : 'outlined'}
-                        size="small"
-                      />
-                    </Tooltip>
+                    <Box
+                      key={n}
+                      onClick={() => select(g.name, n)}
+                      sx={{
+                        flex: '1 1 160px',
+                        minWidth: 150,
+                        maxWidth: 240,
+                        p: 1,
+                        borderRadius: 1.5,
+                        cursor: 'pointer',
+                        border: '1px solid',
+                        borderColor: selected ? 'primary.main' : 'divider',
+                        bgcolor: selected ? 'action.selected' : 'transparent',
+                        transition: 'border-color .15s',
+                        '&:hover': { borderColor: 'primary.main' },
+                      }}
+                    >
+                      <Typography variant="body2" noWrap title={n} sx={{ fontWeight: selected ? 600 : 400 }}>
+                        {n}
+                      </Typography>
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', mt: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {proxies[n]?.type || ''}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: delayHex(d) }}>
+                          {d != null && d > 0 ? `${d}ms` : '—'}
+                        </Typography>
+                      </Stack>
+                    </Box>
                   )
                 })}
               </Box>
