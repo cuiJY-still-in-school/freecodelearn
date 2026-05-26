@@ -270,8 +270,10 @@ fn setup_tray_and_window(app: &mut tauri::App) -> Result<(), Box<dyn std::error:
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
     let show = MenuItem::with_id(app, "show", "显示主界面", true, None::<&str>)?;
+    let core = MenuItem::with_id(app, "toggle-core", "内核 开 / 关", true, None::<&str>)?;
+    let proxy = MenuItem::with_id(app, "toggle-proxy", "系统代理 开 / 关", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出 clashlocal", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let menu = Menu::with_items(app, &[&show, &core, &proxy, &quit])?;
 
     TrayIconBuilder::with_id("main")
         .icon(app.default_window_icon().unwrap().clone())
@@ -284,6 +286,23 @@ fn setup_tray_and_window(app: &mut tauri::App) -> Result<(), Box<dyn std::error:
                     let _ = w.show();
                     let _ = w.unminimize();
                     let _ = w.set_focus();
+                }
+            }
+            "toggle-core" => {
+                if let Some(mgr) = app.try_state::<CoreManager>() {
+                    if mgr.is_running() {
+                        let _ = mgr.stop();
+                    } else {
+                        let _ = mgr.start(app);
+                    }
+                }
+            }
+            "toggle-proxy" => {
+                let port = kernel::settings::load(app).mixed_port;
+                if sysproxy::is_enabled(port) {
+                    let _ = sysproxy::disable(app);
+                } else {
+                    let _ = sysproxy::enable(app, port);
                 }
             }
             "quit" => {
@@ -332,6 +351,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { useEffect, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { Box, List, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material'
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded'
 import PublicRoundedIcon from '@mui/icons-material/PublicRounded'
@@ -34,6 +36,16 @@ interface Props {
 }
 
 export default function Sidebar({ active, onChange }: Props) {
+  const [running, setRunning] = useState(false)
+  useEffect(() => {
+    const tick = () =>
+      invoke<{ running: boolean }>('core_status')
+        .then((s) => setRunning(s.running))
+        .catch(() => {})
+    tick()
+    const id = setInterval(tick, 3000)
+    return () => clearInterval(id)
+  }, [])
   return (
     <Box
       sx={{
@@ -53,8 +65,8 @@ export default function Sidebar({ active, onChange }: Props) {
             width: 10,
             height: 10,
             borderRadius: '50%',
-            bgcolor: 'primary.main',
-            boxShadow: '0 0 8px rgba(97,114,255,0.8)',
+            bgcolor: running ? 'success.main' : 'text.disabled',
+            boxShadow: running ? '0 0 8px rgba(56,211,159,0.9)' : 'none',
           }}
         />
         <Typography sx={{ fontWeight: 700, fontSize: 18 }}>clashlocal</Typography>

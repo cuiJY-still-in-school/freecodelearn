@@ -46,6 +46,7 @@ export default function Home() {
   const [mem, setMem] = useState(0)
   const [lanIp, setLanIp] = useState<string | null>(null)
   const [history, setHistory] = useState<{ up: number; down: number }[]>([])
+  const [conns, setConns] = useState(0)
 
   const refresh = useCallback(async () => {
     try {
@@ -77,6 +78,7 @@ export default function Home() {
       setTraffic({ up: 0, down: 0 })
       setMem(0)
       setHistory([])
+      setConns(0)
       return
     }
     let alive = true
@@ -108,6 +110,19 @@ export default function Home() {
         ws.onmessage = (e) => {
           try {
             setMem(JSON.parse(e.data).inuse || 0)
+          } catch {
+            /* ignore */
+          }
+        }
+      })
+      .catch(() => {})
+    openWs('/connections')
+      .then((ws) => {
+        if (!alive) return ws.close()
+        sockets.push(ws)
+        ws.onmessage = (e) => {
+          try {
+            setConns((JSON.parse(e.data).connections || []).length)
           } catch {
             /* ignore */
           }
@@ -247,6 +262,9 @@ export default function Home() {
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         内存 {fmtBytes(mem)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        连接 {conns}
                       </Typography>
                     </Stack>
                   </Stack>
