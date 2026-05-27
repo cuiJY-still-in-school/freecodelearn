@@ -347,6 +347,68 @@ mod imp {
         Ok(())
     }
 
+    /// 并发热点子网(本机做网关)。
+    const AP_SUBNET: &str = "10.42.0.0/24";
+
+    /// 并发热点:不切断本机原 WiFi,在同一网卡上加虚拟 AP 接口,锁到 station 当前
+    /// 信道发热点;客户端经透明代理(tproxy_port)走 VPN。需已授权(走 helper 免密)。
+    /// 仅 station 在 2.4GHz 时可用(5GHz 信道多为 No-IR 不能当 AP)。
+    pub fn concurrent_start(
+        ifname: &str,
+        ssid: &str,
+        password: &str,
+        tproxy_port: u16,
+    ) -> Result<(), String> {
+        use crate::kernel::privilege;
+        if ssid.is_empty() || password.len() < 8 || password.len() > 63 {
+            return Err("SSID 不能为空,密码需 8–63 位".into());
+        }
+        // SSID/密码限制为安全字符,避免注入 hostapd 配置
+        let ok = |s: &str| s.chars().all(|c| c.is_ascii_graphic() || c == ' ');
+        if !ok(ssid) || !ok(password) {
+            return Err("SSID/密码含不支持的字符(仅限可见 ASCII)".into());
+        }
+        let if_ = if ifname.is_empty() { "wlan0" } else { ifname };
+        let (band, channel) = sta_chan(if_).ok_or_else(|| {
+            "未检测到本机的 WiFi 连接;并发热点需要本机先连上一个 2.4GHz WiFi 作为上游。".to_string()
+        })?;
+        if band != "bg" {
+            return Err(format!(
+                "并发热点要求热点与本机 WiFi 同信道,而本机当前连的是 5GHz(无法当 AP)。请先把本机连到 2.4GHz 的 WiFi(同一个路由器的 2.4G 即可),再开并发热点。"
+            ));
+        }
+        let ch = channel.to_string();
+        privilege::run(&["apup", if_, ssid, password, &ch, AP_SUBNET])?;
+        privilege::run(&["enable", AP_SUBNET, &tproxy_port.to_string()])?;
+        Ok(())
+    }
+
+    pub fn concurrent_stop(ifname: &str) -> Result<(), String> {
+        use crate::kernel::privilege;
+        let if_ = if ifname.is_empty() { "wlan0" } else { ifname };
+        let _ = privilege::run(&["apdown", if_]);
+        let _ = privilege::run(&["disable"]);
+        Ok(())
+    }
+
+    pub fn concurrent_active() -> bool {
+        std::fs::read_to_string("/run/clashlocal-hostapd.pid")
+            .ok()
+            .and_then(|s| s.trim().parse::<u32>().ok())
+            .map(|pid| std::path::Path::new(&format!("/proc/{pid}")).exists())
+            .unwrap_or(false)
+    }
+
+    /// 本机 station 当前频段:"2.4GHz" / "5GHz" / ""(未连接)。供前端判断与引导。
+    pub fn station_band(ifname: &str) -> String {
+        let if_ = if ifname.is_empty() { "wlan0" } else { ifname };
+        match sta_chan(if_) {
+            Some((b, _)) if b == "bg" => "2.4GHz".into(),
+            Some(_) => "5GHz".into(),
+            None => String::new(),
+        }
+    }
+
     pub fn subnet(ifname: &str) -> Option<String> {
         let if_ = if ifname.is_empty() { "wlan0" } else { ifname };
         let out = Command::new("nmcli")
@@ -484,6 +546,24 @@ mod imp {
         Ok(())
     }
 
+    pub fn concurrent_start(
+        _ifname: &str,
+        _ssid: &str,
+        _password: &str,
+        _tproxy_port: u16,
+    ) -> Result<(), String> {
+        Err("并发热点暂仅支持 Linux;Windows 请用系统「移动热点」或本应用的局域网代理。".into())
+    }
+    pub fn concurrent_stop(_ifname: &str) -> Result<(), String> {
+        Ok(())
+    }
+    pub fn concurrent_active() -> bool {
+        false
+    }
+    pub fn station_band(_ifname: &str) -> String {
+        String::new()
+    }
+
     pub fn subnet(_ifname: &str) -> Option<String> {
         Some("192.168.137.0/24".into())
     }
@@ -504,4 +584,7 @@ mod imp {
     }
 }
 
-pub use imp::{lan_ip, list_wifi_devices, start, status, stop, subnet, wifi_capability};
+pub use imp::{
+    concurrent_active, concurrent_start, concurrent_stop, lan_ip, list_wifi_devices, start,
+    station_band, status, stop, subnet, wifi_capability,
+};

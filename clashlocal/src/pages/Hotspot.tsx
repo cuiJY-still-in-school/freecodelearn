@@ -57,6 +57,8 @@ export default function Hotspot() {
   const [port, setPort] = useState(7893)
   const [status, setStatus] = useState<HotspotStatus | null>(null)
   const [cap, setCap] = useState<WifiCap | null>(null)
+  const [staBand, setStaBand] = useState('')
+  const [concurrentOn, setConcurrentOn] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -81,6 +83,12 @@ export default function Hotspot() {
         setCap(await invoke<WifiCap>('wifi_capability'))
       } catch {
         setCap(null)
+      }
+      try {
+        setStaBand(await invoke<string>('station_band'))
+        setConcurrentOn(await invoke<boolean>('concurrent_hotspot_status'))
+      } catch {
+        setStaBand('')
       }
     } catch (e) {
       setErr(String(e))
@@ -113,6 +121,25 @@ export default function Hotspot() {
       await refresh()
     } catch (e) {
       setErr(String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const toggleConcurrent = async () => {
+    setBusy(true)
+    setErr(null)
+    try {
+      if (concurrentOn) {
+        await invoke('concurrent_hotspot_stop')
+      } else {
+        await invoke('save_hotspot_config', { ssid, password, ifname, band })
+        await invoke('concurrent_hotspot_start')
+      }
+      await refresh()
+    } catch (e) {
+      setErr(String(e))
+      await refresh()
     } finally {
       setBusy(false)
     }
@@ -176,12 +203,64 @@ export default function Hotspot() {
           </CardContent>
         </Card>
 
+        {isLinux && (
+          <Card sx={{ borderLeft: '3px solid', borderColor: concurrentOn ? 'success.main' : 'info.main' }}>
+            <CardContent>
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Box sx={{ pr: 2 }}>
+                  <Typography variant="overline" color="text.secondary">
+                    并发热点(本机不脱网 · 单网卡可用)
+                  </Typography>
+                  <Typography variant="h6" color={concurrentOn ? 'success.main' : 'text.primary'}>
+                    {concurrentOn ? '● 已开启' : '○ 已关闭'}
+                  </Typography>
+                </Box>
+                <Button
+                  variant={concurrentOn ? 'outlined' : 'contained'}
+                  color={concurrentOn ? 'error' : 'primary'}
+                  onClick={toggleConcurrent}
+                  disabled={busy || (!concurrentOn && staBand !== '2.4GHz')}
+                  sx={{ minWidth: 100 }}
+                >
+                  {concurrentOn ? '关闭' : '开启并发热点'}
+                </Button>
+              </Stack>
+              <Typography variant="body2" color="text.secondary">
+                本机继续连着原 WiFi 上网,同一张网卡再虚拟出一个热点(锁在与原 WiFi 相同的信道),
+                连入的设备流量经透明代理走 VPN。本机网络不中断。
+              </Typography>
+              {staBand === '2.4GHz' ? (
+                <Alert severity="success" icon={false} sx={{ mt: 1, py: 0 }}>
+                  本机当前连的是 2.4GHz,可用。热点名/密码与下方一致(SSID:{ssid})。
+                </Alert>
+              ) : (
+                <Alert severity="warning" icon={false} sx={{ mt: 1 }}>
+                  并发热点要求本机连 <b>2.4GHz</b> WiFi(5GHz 信道不能当 AP)。本机当前
+                  {staBand ? `连的是 ${staBand}` : '未连 WiFi'}——请先把本机连到同一路由器的 2.4GHz,再开启。
+                </Alert>
+              )}
+              {concurrentOn && (
+                <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mt: 2 }}>
+                  <Box sx={{ p: 1.5, bgcolor: '#fff', borderRadius: 1, lineHeight: 0 }}>
+                    <QRCodeSVG value={wifiQr} size={120} />
+                  </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    用 iPhone 自带相机/系统扫码器扫码连接(别用微信)。
+                    <br />SSID:{ssid}
+                    <br />密码:{password}
+                  </Typography>
+                </Stack>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardContent>
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Box>
                 <Typography variant="overline" color="text.secondary">
-                  WiFi 热点
+                  WiFi 热点(切 AP 模式 · 本机会脱网)
                 </Typography>
                 <Typography variant="h6" color={active ? 'success.main' : 'text.primary'}>
                   {active ? '● 已开启' : '○ 已关闭'}

@@ -45,6 +45,26 @@ NFT
     ip rule del fwmark $FWMARK table $RT 2>/dev/null || true
     ip route flush table $RT 2>/dev/null || true
     ;;
+  apup)
+    IFN="$2"; SSID="$3"; PASS="$4"; CH="$5"; SUBNET="$6"
+    PREFIX="${SUBNET%.*}"; GW="$PREFIX.1"
+    iw dev "$IFN" interface add ap0 type __ap 2>/dev/null || true
+    ip addr flush dev ap0 2>/dev/null || true
+    ip addr add "$GW/24" dev ap0
+    ip link set ap0 up
+    printf 'interface=ap0\ndriver=nl80211\nssid=%s\nhw_mode=g\nchannel=%s\nauth_algs=1\nwpa=2\nwpa_passphrase=%s\nwpa_key_mgmt=WPA-PSK\nrsn_pairwise=CCMP\n' "$SSID" "$CH" "$PASS" > /run/clashlocal-hostapd.conf
+    hostapd -B -P /run/clashlocal-hostapd.pid /run/clashlocal-hostapd.conf
+    dnsmasq --conf-file=/dev/null --interface=ap0 --bind-interfaces --except-interface=lo --port=0 --dhcp-range=$PREFIX.10,$PREFIX.200,12h --dhcp-option=3,$GW --dhcp-option=6,223.5.5.5,119.29.29.29 --pid-file=/run/clashlocal-dnsmasq.pid
+    ;;
+  apdown)
+    [ -f /run/clashlocal-hostapd.pid ] && kill "$(cat /run/clashlocal-hostapd.pid)" 2>/dev/null || true
+    [ -f /run/clashlocal-dnsmasq.pid ] && kill "$(cat /run/clashlocal-dnsmasq.pid)" 2>/dev/null || true
+    rm -f /run/clashlocal-hostapd.pid /run/clashlocal-dnsmasq.pid /run/clashlocal-hostapd.conf
+    iw dev ap0 del 2>/dev/null || true
+    ;;
+  apstatus)
+    [ -f /run/clashlocal-hostapd.pid ] && kill -0 "$(cat /run/clashlocal-hostapd.pid)" 2>/dev/null && echo up || echo down
+    ;;
   noop) : ;;
   *) echo "unknown cmd: $1" >&2; exit 2 ;;
 esac
@@ -85,6 +105,9 @@ install -D -m 0755 '{tmp}' '{helper}'
 printf '%s ALL=(root) NOPASSWD: {helper}\n' '{user}' > '{sudoers}'
 chmod 0440 '{sudoers}'
 visudo -cf '{sudoers}' >/dev/null
+install -d /etc/NetworkManager/conf.d
+printf '[keyfile]\nunmanaged-devices=interface-name:ap0\n' > /etc/NetworkManager/conf.d/clashlocal-ap.conf
+nmcli general reload 2>/dev/null || true
 "#,
             tmp = tmp.display(),
             helper = HELPER,

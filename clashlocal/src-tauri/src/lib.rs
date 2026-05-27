@@ -111,6 +111,66 @@ fn wifi_capability(app: tauri::AppHandle) -> kernel::hotspot::WifiCapability {
     kernel::hotspot::wifi_capability(&kernel::settings::load(&app).hotspot_ifname)
 }
 
+/// 本机 station 当前频段:"2.4GHz" / "5GHz" / ""。并发热点需 2.4GHz。
+#[tauri::command]
+fn station_band(app: tauri::AppHandle) -> String {
+    kernel::hotspot::station_band(&kernel::settings::load(&app).hotspot_ifname)
+}
+
+/// 并发热点状态(本机不脱网的虚拟 AP 是否在跑)。
+#[tauri::command]
+fn concurrent_hotspot_status() -> bool {
+    kernel::hotspot::concurrent_active()
+}
+
+/// 开并发热点:本机原 WiFi 不断,同网卡虚拟 AP 同信道发热点,客户端经透明代理走 VPN。
+/// 需已授权;会顺带开启透明代理配置(tproxy-port)并给内核 setcap、重启内核。
+#[tauri::command]
+fn concurrent_hotspot_start(
+    app: tauri::AppHandle,
+    mgr: tauri::State<CoreManager>,
+) -> Result<(), String> {
+    let mut s = kernel::settings::load(&app);
+    let bin = kernel::kernel_bin_path(&app)?;
+    let bin = bin.to_string_lossy().to_string();
+    // 内核需带 tproxy-port + CAP_NET_ADMIN,客户端流量才能被 TPROXY 接住
+    kernel::privilege::set_caps(&bin, true)?;
+    s.transparent = true;
+    kernel::settings::save(&app, &s)?;
+    if mgr.is_running() {
+        mgr.stop()?;
+    }
+    mgr.start(&app)?;
+    // 起虚拟 AP + dnsmasq + nft TPROXY(频段不对/未授权会返回友好错误)
+    kernel::hotspot::concurrent_start(
+        &s.hotspot_ifname,
+        &s.hotspot_ssid,
+        &s.hotspot_password,
+        kernel::TPROXY_PORT,
+    )
+}
+
+/// 关并发热点:停虚拟 AP/dnsmasq + 清 nft;关透明代理配置并重启内核还原。
+#[tauri::command]
+fn concurrent_hotspot_stop(
+    app: tauri::AppHandle,
+    mgr: tauri::State<CoreManager>,
+) -> Result<(), String> {
+    let mut s = kernel::settings::load(&app);
+    kernel::hotspot::concurrent_stop(&s.hotspot_ifname)?;
+    s.transparent = false;
+    kernel::settings::save(&app, &s)?;
+    if mgr.is_running() {
+        mgr.stop()?;
+        mgr.start(&app)?;
+    }
+    if s.local_mode != "tun" {
+        let bin = kernel::kernel_bin_path(&app)?;
+        let _ = kernel::privilege::set_caps(&bin.to_string_lossy(), false);
+    }
+    Ok(())
+}
+
 /// 是否已完成一次性管理员授权。
 #[tauri::command]
 fn admin_granted() -> bool {
@@ -371,6 +431,9 @@ fn setup_tray_and_window(app: &mut tauri::App) -> Result<(), Box<dyn std::error:
             }
             "quit" => {
                 let s = kernel::settings::load(app);
+                if kernel::hotspot::concurrent_active() {
+                    let _ = kernel::hotspot::concurrent_stop(&s.hotspot_ifname);
+                }
                 if s.transparent {
                     let _ = kernel::transparent::disable();
                 }
@@ -456,6 +519,10 @@ pub fn run() {
             set_transparent,
             set_local_mode,
             wifi_capability,
+            station_band,
+            concurrent_hotspot_status,
+            concurrent_hotspot_start,
+            concurrent_hotspot_stop,
             set_auto_start_core,
             save_mixed_port,
             admin_granted,
