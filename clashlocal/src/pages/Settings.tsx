@@ -56,6 +56,7 @@ export default function Settings() {
   )
   const [busy, setBusy] = useState(false)
   const [port, setPort] = useState(7893)
+  const [adminOk, setAdminOk] = useState(false)
 
   const restartCore = async () => {
     setBusy(true)
@@ -86,6 +87,19 @@ export default function Settings() {
     }
   }
 
+  const doGrant = async () => {
+    setBusy(true)
+    setErr(null)
+    try {
+      await invoke('grant_admin')
+      setAdminOk(await invoke<boolean>('admin_granted'))
+    } catch (e) {
+      setErr(String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const changeTheme = (v: string | null) => {
     if (!v) return
     localStorage.setItem('theme-mode', v)
@@ -100,6 +114,7 @@ export default function Settings() {
         const s = await invoke<AppSettings>('get_settings')
         setAutoCore(s.auto_start_core)
         setPort(s.mixed_port || 7893)
+        setAdminOk(await invoke<boolean>('admin_granted'))
         const cs = await invoke<{ version: string | null }>('core_status')
         setCoreVer(cs.version)
       } catch (e) {
@@ -219,6 +234,30 @@ export default function Settings() {
           <Typography variant="caption" color="text.secondary">
             系统代理 + 局域网共享共用端口(修改后会重启内核)
           </Typography>
+        </CardContent>
+      </Card>
+
+      <Card sx={{ maxWidth: 680, mt: 2 }}>
+        <CardContent>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ pr: 2 }}>
+              <Typography>一次性管理员授权</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {adminOk
+                  ? '已授权 ✓ 透明代理等特权操作不再弹密码'
+                  : '仅透明代理(让局域网设备零配置走 VPN)需要;授权一次后永久免密。日常用「系统代理 / 局域网代理」无需授权。'}
+              </Typography>
+            </Box>
+            <Button
+              size="small"
+              variant={adminOk ? 'outlined' : 'contained'}
+              color={adminOk ? 'success' : 'primary'}
+              onClick={doGrant}
+              disabled={busy || adminOk}
+            >
+              {adminOk ? '已授权' : '授权'}
+            </Button>
+          </Stack>
         </CardContent>
       </Card>
 

@@ -1,6 +1,7 @@
 pub mod config;
 pub mod downloader;
 pub mod hotspot;
+pub mod privilege;
 pub mod process;
 pub mod profiles;
 pub mod settings;

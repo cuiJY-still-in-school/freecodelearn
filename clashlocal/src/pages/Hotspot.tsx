@@ -16,6 +16,7 @@ import {
 
 interface Settings {
   transparent: boolean
+  mixed_port: number
   hotspot_ssid: string
   hotspot_password: string
   hotspot_ifname: string
@@ -41,6 +42,8 @@ export default function Hotspot() {
   const [devices, setDevices] = useState<string[]>([])
   const [transparent, setTransparent] = useState(false)
   const [platform, setPlatform] = useState('linux')
+  const [lanIp, setLanIp] = useState<string | null>(null)
+  const [port, setPort] = useState(7893)
   const [status, setStatus] = useState<HotspotStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -53,9 +56,15 @@ export default function Hotspot() {
       setIfname(s.hotspot_ifname || 'wlan0')
       setBand(s.hotspot_band || '')
       setTransparent(s.transparent)
+      setPort(s.mixed_port || 7893)
       setStatus(await invoke<HotspotStatus>('hotspot_status'))
       setDevices(await invoke<string[]>('list_wifi_devices'))
       setPlatform(await invoke<string>('os_platform'))
+      try {
+        setLanIp(await invoke<string>('lan_ip'))
+      } catch {
+        setLanIp(null)
+      }
     } catch (e) {
       setErr(String(e))
     }
@@ -107,15 +116,15 @@ export default function Hotspot() {
   return (
     <Box>
       <Typography variant="h5" sx={{ fontWeight: 700 }}>
-        热点
+        共享
       </Typography>
       <Typography color="text.secondary" sx={{ mb: 2 }}>
-        把本机变成 WiFi 热点,连入设备走 VPN
+        把本机的 VPN 共享给同一局域网/WiFi 下的其它设备
       </Typography>
 
-      <Alert severity="info" sx={{ mb: 2, maxWidth: 720 }}>
-        单网卡(wlan0 同时上网)时,AP 与上网需同频段并发,5GHz 宽频道常不支持 —— 可改用 2.4GHz、走网线上网,
-        或插第二块网卡(下方可选接口/频段)。透明代理依赖 root,开启时会弹授权(pkexec)。
+      <Alert severity="success" sx={{ mb: 2, maxWidth: 720 }}>
+        推荐:<b>局域网代理</b>(下方)。本机与手机连同一个 WiFi/路由器,手机把代理填成「本机IP:{port}」即可走 VPN,
+        <b>无需管理员、无需开热点</b>。下面的「WiFi 热点」需要双网卡并发,本机单 5GHz 网卡无法边连网边发热点,通常用不了。
       </Alert>
 
       {err && (
@@ -125,6 +134,23 @@ export default function Hotspot() {
       )}
 
       <Stack spacing={2} sx={{ maxWidth: 720 }}>
+        <Card sx={{ borderLeft: '3px solid', borderColor: 'success.main' }}>
+          <CardContent>
+            <Typography variant="overline" color="text.secondary">
+              局域网代理(推荐 · 免管理员)
+            </Typography>
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              {lanIp ? `${lanIp}:${port}` : '未获取到本机局域网 IP'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              确保内核已启动、本机与设备在同一 WiFi/路由器下,然后在设备上手动设置 HTTP/SOCKS 代理:
+              <br />· iPhone:设置 → 无线局域网 → 点当前 WiFi 的 ⓘ → 配置代理 → 手动 → 服务器填上面 IP、端口填 {port}
+              <br />· Android:WiFi → 修改网络 → 高级 → 代理「手动」→ 同样填写
+              <br />· 电脑:浏览器/系统代理填「{lanIp ?? '本机IP'}:{port}」
+            </Typography>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardContent>
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -216,7 +242,7 @@ export default function Hotspot() {
                     扫码连接
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    手机相机/微信扫码即可加入热点。
+                    用 <b>iPhone 自带相机</b> 或系统扫码器对准即可加入热点(微信扫码常把它当文本、识别不了,不要用微信)。
                     <br />SSID:{ssid}
                     <br />密码:{password}
                   </Typography>

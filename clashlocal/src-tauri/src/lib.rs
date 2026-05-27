@@ -105,6 +105,18 @@ fn lan_ip() -> Option<String> {
     kernel::hotspot::lan_ip()
 }
 
+/// 是否已完成一次性管理员授权。
+#[tauri::command]
+fn admin_granted() -> bool {
+    kernel::privilege::is_granted()
+}
+
+/// 一次性管理员授权(装 root 助手 + sudoers 免密)。
+#[tauri::command]
+fn grant_admin() -> Result<(), String> {
+    kernel::privilege::grant()
+}
+
 /// 修改混合端口:存设置 → 重启内核 → 若系统代理原指向旧端口则重设到新端口。
 #[tauri::command]
 fn save_mixed_port(
@@ -395,7 +407,9 @@ pub fn run() {
             list_wifi_devices,
             set_transparent,
             set_auto_start_core,
-            save_mixed_port
+            save_mixed_port,
+            admin_granted,
+            grant_admin
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
