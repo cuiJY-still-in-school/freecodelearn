@@ -61,12 +61,22 @@ esac
                 .unwrap_or(false)
     }
 
+    /// 当前用户名。优先 `id -un`(桌面图标启动时 $USER 常为空),回退环境变量。
+    fn current_user() -> Option<String> {
+        Command::new("id")
+            .arg("-un")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|s| !s.is_empty())
+            .or_else(|| std::env::var("USER").ok().filter(|s| !s.is_empty()))
+            .or_else(|| std::env::var("LOGNAME").ok().filter(|s| !s.is_empty()))
+    }
+
     /// 一次性授权:pkexec 把助手装到 root 目录并写 sudoers 免密。
     pub fn grant() -> Result<(), String> {
-        let user = std::env::var("USER")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| "无法获取当前用户名".to_string())?;
+        let user = current_user().ok_or_else(|| "无法获取当前用户名".to_string())?;
         let tmp = std::env::temp_dir().join("clashlocal-net.sh");
         std::fs::write(&tmp, helper_body()).map_err(|e| format!("写助手脚本失败: {e}"))?;
         let installer = format!(
