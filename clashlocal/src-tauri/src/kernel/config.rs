@@ -78,13 +78,6 @@ pub fn write_config(app: &tauri::AppHandle) -> Result<(PathBuf, String), String>
     );
     put(map, "secret", Value::from(secret.clone()));
     put(map, "ipv6", Value::from(false));
-    // 内置 metacubexd 面板:mihomo 首次启动自动下载,served 于 /ui/
-    put(map, "external-ui", Value::from("ui"));
-    put(
-        map,
-        "external-ui-url",
-        Value::from("https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip"),
-    );
     if map.get("mode").is_none() {
         put(map, "mode", Value::from("rule"));
     }

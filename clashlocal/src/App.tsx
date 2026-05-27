@@ -11,7 +11,6 @@ import Connections from './pages/Connections'
 import Logs from './pages/Logs'
 import Hotspot from './pages/Hotspot'
 import Settings from './pages/Settings'
-import Dashboard from './pages/Dashboard'
 
 const PAGES: Record<string, ComponentType> = {
   home: Home,
@@ -20,7 +19,6 @@ const PAGES: Record<string, ComponentType> = {
   rules: Rules,
   connections: Connections,
   logs: Logs,
-  dashboard: Dashboard,
   hotspot: Hotspot,
   settings: Settings,
 }
