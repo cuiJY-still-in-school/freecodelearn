@@ -219,7 +219,7 @@ export default function Hotspot() {
                   variant={concurrentOn ? 'outlined' : 'contained'}
                   color={concurrentOn ? 'error' : 'primary'}
                   onClick={toggleConcurrent}
-                  disabled={busy || (!concurrentOn && staBand !== '2.4GHz')}
+                  disabled={busy || (!concurrentOn && staBand === '')}
                   sx={{ minWidth: 100 }}
                 >
                   {concurrentOn ? '关闭' : '开启并发热点'}
@@ -231,12 +231,16 @@ export default function Hotspot() {
               </Typography>
               {staBand === '2.4GHz' ? (
                 <Alert severity="success" icon={false} sx={{ mt: 1, py: 0 }}>
-                  本机当前连的是 2.4GHz,可用。热点名/密码与下方一致(SSID:{ssid})。
+                  本机当前连的是 2.4GHz,可直接开启。热点名/密码与下方一致(SSID:{ssid})。
+                </Alert>
+              ) : staBand === '5GHz' ? (
+                <Alert severity="info" icon={false} sx={{ mt: 1 }}>
+                  本机当前连的是 5GHz。点「开启并发热点」会<b>自动把本机切到同路由器的 2.4GHz</b>
+                  (会短暂断网重连、网速降到 2.4G),关闭热点时自动切回。
                 </Alert>
               ) : (
                 <Alert severity="warning" icon={false} sx={{ mt: 1 }}>
-                  并发热点要求本机连 <b>2.4GHz</b> WiFi(5GHz 信道不能当 AP)。本机当前
-                  {staBand ? `连的是 ${staBand}` : '未连 WiFi'}——请先把本机连到同一路由器的 2.4GHz,再开启。
+                  本机未连 WiFi。并发热点需要本机先连上一个 WiFi(作为上游),请先连 WiFi 再开启。
                 </Alert>
               )}
               {concurrentOn && (

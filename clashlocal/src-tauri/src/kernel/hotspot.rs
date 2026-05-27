@@ -399,6 +399,19 @@ mod imp {
             .unwrap_or(false)
     }
 
+    /// 当前网卡上活动的 WiFi 连接名(用于切换频段)。
+    pub fn active_wifi_con(ifname: &str) -> Option<String> {
+        let if_ = if ifname.is_empty() { "wlan0" } else { ifname };
+        let out = Command::new("nmcli")
+            .args(["-t", "-f", "NAME,TYPE,DEVICE", "con", "show", "--active"])
+            .output()
+            .ok()?;
+        String::from_utf8_lossy(&out.stdout).lines().find_map(|l| {
+            let f: Vec<&str> = l.splitn(3, ':').collect();
+            (f.len() == 3 && f[1] == "802-11-wireless" && f[2] == if_).then(|| f[0].to_string())
+        })
+    }
+
     /// 本机 station 当前频段:"2.4GHz" / "5GHz" / ""(未连接)。供前端判断与引导。
     pub fn station_band(ifname: &str) -> String {
         let if_ = if ifname.is_empty() { "wlan0" } else { ifname };
@@ -563,6 +576,9 @@ mod imp {
     pub fn station_band(_ifname: &str) -> String {
         String::new()
     }
+    pub fn active_wifi_con(_ifname: &str) -> Option<String> {
+        None
+    }
 
     pub fn subnet(_ifname: &str) -> Option<String> {
         Some("192.168.137.0/24".into())
@@ -585,6 +601,6 @@ mod imp {
 }
 
 pub use imp::{
-    concurrent_active, concurrent_start, concurrent_stop, lan_ip, list_wifi_devices, start,
-    station_band, status, stop, subnet, wifi_capability,
+    active_wifi_con, concurrent_active, concurrent_start, concurrent_stop, lan_ip,
+    list_wifi_devices, start, station_band, status, stop, subnet, wifi_capability,
 };

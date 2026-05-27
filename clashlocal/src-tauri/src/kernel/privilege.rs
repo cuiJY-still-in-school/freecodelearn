@@ -65,6 +65,14 @@ NFT
   apstatus)
     [ -f /run/clashlocal-hostapd.pid ] && kill -0 "$(cat /run/clashlocal-hostapd.pid)" 2>/dev/null && echo up || echo down
     ;;
+  band24)
+    nmcli con mod "$2" 802-11-wireless.band bg 2>/dev/null || true
+    nmcli con up "$2" 2>/dev/null || true
+    ;;
+  bandauto)
+    nmcli con mod "$2" 802-11-wireless.band '' 2>/dev/null || true
+    nmcli con up "$2" 2>/dev/null || true
+    ;;
   noop) : ;;
   *) echo "unknown cmd: $1" >&2; exit 2 ;;
 esac

@@ -133,6 +133,28 @@ fn concurrent_hotspot_start(
     let mut s = kernel::settings::load(&app);
     let bin = kernel::kernel_bin_path(&app)?;
     let bin = bin.to_string_lossy().to_string();
+
+    // 并发热点要求 AP 与本机 WiFi 同信道,而 5GHz 信道多为 No-IR 不能当 AP。
+    // 本机若在 5G,自动把当前 WiFi 切到 2.4G(锁 band bg 重连),关闭时再还原。
+    match kernel::hotspot::station_band(&s.hotspot_ifname).as_str() {
+        "5GHz" => {
+            let con = kernel::hotspot::active_wifi_con(&s.hotspot_ifname)
+                .ok_or_else(|| "未找到本机当前 WiFi 连接,无法自动切换到 2.4G".to_string())?;
+            kernel::privilege::run(&["band24", &con])?;
+            std::thread::sleep(std::time::Duration::from_secs(4));
+            if kernel::hotspot::station_band(&s.hotspot_ifname) != "2.4GHz" {
+                let _ = kernel::privilege::run(&["bandauto", &con]);
+                return Err(
+                    "已尝试把本机切到 2.4G 但没连上(路由器可能没开 2.4GHz)。并发热点需要 2.4G。"
+                        .into(),
+                );
+            }
+            s.auto_band_switched = true;
+        }
+        "" => return Err("本机未连任何 WiFi;并发热点需要本机先连一个 2.4GHz WiFi 作为上游。".into()),
+        _ => {}
+    }
+
     // 内核需带 tproxy-port + CAP_NET_ADMIN,客户端流量才能被 TPROXY 接住
     kernel::privilege::set_caps(&bin, true)?;
     s.transparent = true;
@@ -159,6 +181,13 @@ fn concurrent_hotspot_stop(
     let mut s = kernel::settings::load(&app);
     kernel::hotspot::concurrent_stop(&s.hotspot_ifname)?;
     s.transparent = false;
+    // 还原开热点时自动切到的 2.4G(切回 band 自动,通常回到 5G)
+    if s.auto_band_switched {
+        if let Some(con) = kernel::hotspot::active_wifi_con(&s.hotspot_ifname) {
+            let _ = kernel::privilege::run(&["bandauto", &con]);
+        }
+        s.auto_band_switched = false;
+    }
     kernel::settings::save(&app, &s)?;
     if mgr.is_running() {
         mgr.stop()?;

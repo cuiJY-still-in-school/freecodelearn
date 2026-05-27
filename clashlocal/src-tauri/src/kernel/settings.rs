@@ -43,6 +43,9 @@ pub struct Settings {
     /// 应用启动时自动拉起内核。
     #[serde(default)]
     pub auto_start_core: bool,
+    /// 开并发热点时为满足「同信道」把本机从 5G 自动切到了 2.4G(关闭时据此还原)。
+    #[serde(default)]
+    pub auto_band_switched: bool,
 }
 
 impl Default for Settings {
@@ -56,6 +59,7 @@ impl Default for Settings {
             hotspot_ifname: d_ifname(),
             hotspot_band: String::new(),
             auto_start_core: false,
+            auto_band_switched: false,
         }
     }
 }
