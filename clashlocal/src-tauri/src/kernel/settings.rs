@@ -15,12 +15,18 @@ fn d_ifname() -> String {
 fn d_port() -> u16 {
     7893
 }
+fn d_local_mode() -> String {
+    "system".into()
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Settings {
     /// 透明代理(让热点设备自动走 VPN)。开启会给内核加 tproxy-port + fake-ip dns。
     #[serde(default)]
     pub transparent: bool,
+    /// 本机网络模式:"system" 系统代理 / "tun" 全局 TUN / "none" 直连(都不开)。
+    #[serde(default = "d_local_mode")]
+    pub local_mode: String,
     /// 混合端口(系统代理 + 局域网共享共用)。
     #[serde(default = "d_port")]
     pub mixed_port: u16,
@@ -43,6 +49,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             transparent: false,
+            local_mode: d_local_mode(),
             mixed_port: d_port(),
             hotspot_ssid: d_ssid(),
             hotspot_password: d_pass(),

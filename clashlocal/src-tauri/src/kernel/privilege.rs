@@ -8,16 +8,23 @@ mod imp {
     pub const HELPER: &str = "/usr/local/lib/clashlocal/clashlocal-net.sh";
     const SUDOERS: &str = "/etc/sudoers.d/clashlocal";
 
-    /// root 助手脚本内容:enable/disable 透明代理所需的 setcap + nft + ip rule。
+    /// root 助手脚本内容:
+    /// - setcap/unsetcap <bin>:给内核加/去 CAP_NET_ADMIN(TUN、tproxy 都要)
+    /// - enable <subnet> <tproxy> / disable:透明代理的 nft TPROXY + ip rule
     fn helper_body() -> &'static str {
         r#"#!/bin/bash
 set -e
 FWMARK=1
 RT=100
 case "$1" in
+  setcap)
+    [ -n "$2" ] && setcap 'cap_net_admin,cap_net_bind_service=+ep' "$2"
+    ;;
+  unsetcap)
+    [ -n "$2" ] && setcap -r "$2" 2>/dev/null || true
+    ;;
   enable)
-    SUBNET="$2"; TPROXY="$3"; BIN="$4"
-    [ -n "$BIN" ] && setcap 'cap_net_admin,cap_net_bind_service=+ep' "$BIN"
+    SUBNET="$2"; TPROXY="$3"
     nft -f - <<NFT
 table inet clashlocal
 delete table inet clashlocal
@@ -34,11 +41,9 @@ NFT
     sysctl -w net.ipv4.ip_forward=1 >/dev/null
     ;;
   disable)
-    BIN="$2"
     nft delete table inet clashlocal 2>/dev/null || true
     ip rule del fwmark $FWMARK table $RT 2>/dev/null || true
     ip route flush table $RT 2>/dev/null || true
-    [ -n "$BIN" ] && setcap -r "$BIN" 2>/dev/null || true
     ;;
   noop) : ;;
   *) echo "unknown cmd: $1" >&2; exit 2 ;;
@@ -94,6 +99,11 @@ visudo -cf '{sudoers}' >/dev/null
         Ok(())
     }
 
+    /// 给/去内核二进制的 CAP_NET_ADMIN(TUN、tproxy 绑定都需要)。
+    pub fn set_caps(bin: &str, on: bool) -> Result<(), String> {
+        run(&[if on { "setcap" } else { "unsetcap" }, bin])
+    }
+
     /// 免密执行助手(需已授权)。
     pub fn run(args: &[&str]) -> Result<(), String> {
         if !std::path::Path::new(HELPER).exists() {
@@ -126,6 +136,9 @@ mod imp {
     pub fn run(_args: &[&str]) -> Result<(), String> {
         Ok(())
     }
+    pub fn set_caps(_bin: &str, _on: bool) -> Result<(), String> {
+        Ok(())
+    }
 }
 
-pub use imp::{grant, is_granted, run};
+pub use imp::{grant, is_granted, run, set_caps};

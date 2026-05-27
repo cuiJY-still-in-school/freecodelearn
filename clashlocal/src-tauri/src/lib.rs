@@ -256,24 +256,68 @@ fn set_transparent(
 ) -> Result<(), String> {
     let mut s = kernel::settings::load(&app);
     s.transparent = enable;
-    kernel::settings::save(&app, &s)?;
     let bin = kernel::kernel_bin_path(&app)?;
     let bin = bin.to_string_lossy().to_string();
     if enable {
         // 先 setcap + 装 nft(root),再重启内核以绑定 tproxy
+        kernel::privilege::set_caps(&bin, true)?;
         let subnet = kernel::hotspot::subnet(&s.hotspot_ifname).unwrap_or_else(|| "10.42.0.0/24".to_string());
-        kernel::transparent::enable(&subnet, kernel::TPROXY_PORT, &bin)?;
+        kernel::transparent::enable(&subnet, kernel::TPROXY_PORT)?;
+        kernel::settings::save(&app, &s)?;
         if mgr.is_running() {
             mgr.stop()?;
             mgr.start(&app)?;
         }
     } else {
-        // 先重启内核(去掉 tproxy 配置),再清 nft + 去 cap
+        kernel::settings::save(&app, &s)?;
+        // 先重启内核(去掉 tproxy 配置),再清 nft;TUN 模式仍需 caps,故仅在非 TUN 时去 cap
         if mgr.is_running() {
             mgr.stop()?;
             mgr.start(&app)?;
         }
-        kernel::transparent::disable(&bin)?;
+        kernel::transparent::disable()?;
+        if s.local_mode != "tun" {
+            let _ = kernel::privilege::set_caps(&bin, false);
+        }
+    }
+    Ok(())
+}
+
+/// 本机网络模式:"system" 系统代理 / "tun" 全局 TUN / "none" 直连。
+/// TUN 需先完成一次性授权(创建 tun 设备要 CAP_NET_ADMIN);三种模式互斥。
+#[tauri::command]
+fn set_local_mode(
+    app: tauri::AppHandle,
+    mgr: tauri::State<CoreManager>,
+    mode: String,
+) -> Result<(), String> {
+    let mut s = kernel::settings::load(&app);
+    let bin = kernel::kernel_bin_path(&app)?;
+    let bin = bin.to_string_lossy().to_string();
+
+    if mode == "tun" {
+        // 先确保有 caps(未授权会返回"请先授权"),失败则不改设置
+        kernel::privilege::set_caps(&bin, true)?;
+    }
+    s.local_mode = mode.clone();
+    kernel::settings::save(&app, &s)?;
+
+    // 非 system 模式:关掉系统代理
+    if mode != "system" {
+        let _ = sysproxy::disable(&app);
+    }
+    // 非 tun 且非透明代理:去掉 caps
+    if mode != "tun" && !s.transparent {
+        let _ = kernel::privilege::set_caps(&bin, false);
+    }
+    // 应用 config(tun on/off)
+    if mgr.is_running() {
+        mgr.stop()?;
+        mgr.start(&app)?;
+    }
+    // system 模式:开系统代理指向当前端口
+    if mode == "system" {
+        sysproxy::enable(&app, s.mixed_port)?;
     }
     Ok(())
 }
@@ -322,9 +366,7 @@ fn setup_tray_and_window(app: &mut tauri::App) -> Result<(), Box<dyn std::error:
             "quit" => {
                 let s = kernel::settings::load(app);
                 if s.transparent {
-                    if let Ok(bin) = kernel::kernel_bin_path(app) {
-                        let _ = kernel::transparent::disable(&bin.to_string_lossy());
-                    }
+                    let _ = kernel::transparent::disable();
                 }
                 app.exit(0);
             }
@@ -406,6 +448,7 @@ pub fn run() {
             hotspot_status,
             list_wifi_devices,
             set_transparent,
+            set_local_mode,
             set_auto_start_core,
             save_mixed_port,
             admin_granted,

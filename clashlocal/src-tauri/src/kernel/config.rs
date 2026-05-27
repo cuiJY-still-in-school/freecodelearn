@@ -92,12 +92,32 @@ pub fn write_config(app: &tauri::AppHandle) -> Result<(PathBuf, String), String>
         put(map, "log-level", Value::from("info"));
     }
 
-    // 透明代理模式:加 tproxy-port + fake-ip DNS(热点设备零配置走 VPN)
+    let tun_on = st.local_mode == "tun";
+
+    // 透明代理:加 tproxy-port(热点设备零配置走 VPN)
     if st.transparent {
         put(map, "tproxy-port", Value::from(TPROXY_PORT as u64));
+    }
+
+    // 本机 TUN 模式:接管本机所有流量(创建 tun 设备需 CAP_NET_ADMIN,见一次性授权)。
+    // 用独立设备名 + 独立接口地址,避免与同时运行的 Clash Verge(设备 Mihomo / 198.18.0.1)冲突。
+    if tun_on {
+        let tun: Value = serde_yaml::from_str(
+            "enable: true\ndevice: clashlocal\nstack: gvisor\ninet4-address:\n  - 198.20.0.1/30\nauto-route: true\nauto-detect-interface: true\niproute2-table-index: 2023\niproute2-rule-index: 9010\nmtu: 1500\ndns-hijack:\n  - any:53\n  - tcp://any:53\n",
+        )
+        .map_err(|e| e.to_string())?;
+        put(map, "tun", tun);
+    }
+
+    // TUN 或透明代理都需要内核内建 DNS(fake-ip)。透明代理对外监听,TUN 仅本机。
+    if st.transparent || tun_on {
+        let listen = if st.transparent {
+            format!("0.0.0.0:{DNS_PORT}")
+        } else {
+            format!("127.0.0.1:{DNS_PORT}")
+        };
         let dns: Value = serde_yaml::from_str(&format!(
-            "enable: true\nlisten: 0.0.0.0:{dns}\nenhanced-mode: fake-ip\nfake-ip-range: 198.19.0.1/16\nnameserver:\n  - 223.5.5.5\n  - 8.8.8.8\n",
-            dns = DNS_PORT
+            "enable: true\nlisten: {listen}\nenhanced-mode: fake-ip\nfake-ip-range: 198.19.0.1/16\nnameserver:\n  - 223.5.5.5\n  - 8.8.8.8\n"
         ))
         .map_err(|e| e.to_string())?;
         put(map, "dns", dns);

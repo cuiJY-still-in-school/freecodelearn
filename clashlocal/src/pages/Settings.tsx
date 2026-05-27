@@ -19,6 +19,7 @@ import {
 interface AppSettings {
   auto_start_core: boolean
   mixed_port: number
+  local_mode: string
 }
 
 function Row({
@@ -57,6 +58,7 @@ export default function Settings() {
   const [busy, setBusy] = useState(false)
   const [port, setPort] = useState(7893)
   const [adminOk, setAdminOk] = useState(false)
+  const [localMode, setLocalMode] = useState('system')
 
   const restartCore = async () => {
     setBusy(true)
@@ -80,6 +82,20 @@ export default function Settings() {
     setErr(null)
     try {
       await invoke('save_mixed_port', { port })
+    } catch (e) {
+      setErr(String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const changeLocalMode = async (v: string | null) => {
+    if (!v || v === localMode) return
+    setBusy(true)
+    setErr(null)
+    try {
+      await invoke('set_local_mode', { mode: v })
+      setLocalMode(v)
     } catch (e) {
       setErr(String(e))
     } finally {
@@ -114,6 +130,7 @@ export default function Settings() {
         const s = await invoke<AppSettings>('get_settings')
         setAutoCore(s.auto_start_core)
         setPort(s.mixed_port || 7893)
+        setLocalMode(s.local_mode || 'system')
         setAdminOk(await invoke<boolean>('admin_granted'))
         const cs = await invoke<{ version: string | null }>('core_status')
         setCoreVer(cs.version)
@@ -174,6 +191,32 @@ export default function Settings() {
             checked={autoCore}
             onChange={toggleAutoCore}
           />
+        </CardContent>
+      </Card>
+
+      <Card sx={{ maxWidth: 680, mt: 2 }}>
+        <CardContent>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ pr: 2 }}>
+              <Typography>本机网络模式</Typography>
+              <Typography variant="body2" color="text.secondary">
+                系统代理:改系统代理设置走 VPN,免管理员。
+                <br />TUN:虚拟网卡接管本机全部流量(含不认代理的程序),需先完成下方「一次性授权」。
+                <br />关闭:本机直连,不走 VPN。
+              </Typography>
+            </Box>
+            <ToggleButtonGroup
+              size="small"
+              exclusive
+              value={localMode}
+              onChange={(_, v) => changeLocalMode(v)}
+              disabled={busy}
+            >
+              <ToggleButton value="system">系统代理</ToggleButton>
+              <ToggleButton value="tun">TUN</ToggleButton>
+              <ToggleButton value="none">关闭</ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
         </CardContent>
       </Card>
 

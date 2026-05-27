@@ -5,21 +5,21 @@
 mod imp {
     use crate::kernel::privilege;
 
-    pub fn enable(subnet: &str, tproxy_port: u16, bin: &str) -> Result<(), String> {
-        privilege::run(&["enable", subnet, &tproxy_port.to_string(), bin])
+    pub fn enable(subnet: &str, tproxy_port: u16) -> Result<(), String> {
+        privilege::run(&["enable", subnet, &tproxy_port.to_string()])
     }
 
-    pub fn disable(bin: &str) -> Result<(), String> {
-        privilege::run(&["disable", bin])
+    pub fn disable() -> Result<(), String> {
+        privilege::run(&["disable"])
     }
 }
 
 #[cfg(not(target_os = "linux"))]
 mod imp {
-    pub fn enable(_subnet: &str, _tproxy_port: u16, _bin: &str) -> Result<(), String> {
+    pub fn enable(_subnet: &str, _tproxy_port: u16) -> Result<(), String> {
         Err("透明代理仅支持 Linux;本平台请用代理模式(设备手动把代理设为 本机IP:7893)".into())
     }
-    pub fn disable(_bin: &str) -> Result<(), String> {
+    pub fn disable() -> Result<(), String> {
         Ok(())
     }
 }
