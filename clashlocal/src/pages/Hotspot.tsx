@@ -164,6 +164,9 @@ export default function Hotspot() {
             <Typography variant="h6" sx={{ mb: 1 }}>
               {lanIp ? `${lanIp}:${port}` : '未获取到本机局域网 IP'}
             </Typography>
+            <Typography variant="body2" sx={{ mb: 1, color: 'success.main' }}>
+              本机始终连着原来的 WiFi,网络完全不受影响——只是帮局域网里的其它设备转发流量。
+            </Typography>
             <Typography variant="body2" color="text.secondary">
               确保内核已启动、本机与设备在同一 WiFi/路由器下,然后在设备上手动设置 HTTP/SOCKS 代理:
               <br />· iPhone:设置 → 无线局域网 → 点当前 WiFi 的 ⓘ → 配置代理 → 手动 → 服务器填上面 IP、端口填 {port}
@@ -202,6 +205,10 @@ export default function Hotspot() {
               >
                 <Typography variant="body2">
                   <b>网卡检测</b>:{cap.advice}
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  注意:本机是单网卡,开启热点会把网卡切到 AP 模式,<b>本机会暂时脱离当前 WiFi</b>。
+                  想让本机一直保持原来的网络,请用上面的「局域网代理」。
                 </Typography>
                 {cap.detected && (
                   <Typography variant="caption" color="text.secondary">
