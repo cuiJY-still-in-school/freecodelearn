@@ -7,13 +7,196 @@ pub struct HotspotStatus {
     pub gateway: Option<String>,
 }
 
+/// 无线网卡能力探测结果,用于开热点前判断可行性并给出建议。
+#[derive(Serialize, Default)]
+pub struct WifiCapability {
+    pub ifname: String,
+    /// 是否成功探测到(iw 可用且解析到 phy)。
+    pub detected: bool,
+    /// 网卡支持 AP(热点)模式。
+    pub ap_supported: bool,
+    /// 可同时做 station(连 WiFi 上网)+ AP(发热点)。
+    pub concurrent: bool,
+    /// 虽可并发,但 AP 必须与当前 WiFi 同信道(单射频常见限制)。
+    pub same_channel_only: bool,
+    pub band_24: bool,
+    pub band_5: bool,
+    /// 当前作为 station 连接所在频段:"2.4GHz" / "5GHz" / ""(未连接)。
+    pub sta_band: String,
+    /// 严重级别:"ok" 可用 / "warn" 受限 / "block" 不可用 / "unknown" 探测失败。
+    pub level: String,
+    /// 给用户看的一句话诊断 + 建议。
+    pub advice: String,
+}
+
 // ===== Linux / 其它类 Unix:NetworkManager(nmcli) =====
 #[cfg(not(windows))]
 mod imp {
-    use super::HotspotStatus;
+    use super::{HotspotStatus, WifiCapability};
     use std::process::Command;
 
     const CON_NAME: &str = "clashlocal-hotspot";
+
+    /// 从 sysfs 取接口对应的 phy 名(如 "phy0")。
+    fn phy_of(ifname: &str) -> Option<String> {
+        std::fs::read_to_string(format!("/sys/class/net/{ifname}/phy80211/name"))
+            .ok()
+            .map(|s| s.trim().to_string())
+    }
+
+    /// 收集 `iw phy ... info` 中某节(header 行后,缩进更深的若干行)。
+    fn section_lines(text: &str, header: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut collecting = false;
+        for line in text.lines() {
+            if collecting {
+                if line.starts_with("\t\t") || line.starts_with("    ") {
+                    out.push(line.to_string());
+                } else if line.trim().is_empty() {
+                    continue;
+                } else {
+                    break;
+                }
+            } else if line.contains(header) {
+                collecting = true;
+            }
+        }
+        out
+    }
+
+    /// 解析 "total <= N" 里的 N。
+    fn parse_total(s: &str) -> u32 {
+        s.find("total <=")
+            .map(|i| {
+                s[i + "total <=".len()..]
+                    .trim_start()
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect::<String>()
+                    .parse()
+                    .unwrap_or(0)
+            })
+            .unwrap_or(0)
+    }
+
+    /// 当前作为 station 连接所在频段(读 `iw dev <if> link` 的 freq)。
+    fn sta_band(ifname: &str) -> String {
+        Command::new("iw")
+            .args(["dev", ifname, "link"])
+            .output()
+            .ok()
+            .and_then(|o| {
+                let t = String::from_utf8_lossy(&o.stdout).into_owned();
+                t.lines()
+                    .find_map(|l| l.trim().strip_prefix("freq:").map(|f| f.trim().to_string()))
+            })
+            .and_then(|f| f.parse::<u32>().ok())
+            .map(|mhz| if mhz >= 4900 { "5GHz" } else { "2.4GHz" }.to_string())
+            .unwrap_or_default()
+    }
+
+    /// 当前 station 连接的 (nmcli频段, 信道)。同射频网卡开热点必须锁到这个信道。
+    fn sta_chan(ifname: &str) -> Option<(String, u32)> {
+        let out = Command::new("iw").args(["dev", ifname, "link"]).output().ok()?;
+        let t = String::from_utf8_lossy(&out.stdout);
+        let mhz: u32 = t
+            .lines()
+            .find_map(|l| l.trim().strip_prefix("freq:").map(|f| f.trim().to_string()))?
+            .split('.')
+            .next()?
+            .parse()
+            .ok()?;
+        if mhz >= 4900 {
+            Some(("a".into(), (mhz - 5000) / 5))
+        } else {
+            Some(("bg".into(), (mhz.saturating_sub(2407)) / 5))
+        }
+    }
+
+    pub fn wifi_capability(ifname: &str) -> WifiCapability {
+        let if_ = if ifname.is_empty() { "wlan0" } else { ifname };
+        let mut cap = WifiCapability {
+            ifname: if_.to_string(),
+            level: "unknown".into(),
+            ..Default::default()
+        };
+        let phy = match phy_of(if_) {
+            Some(p) => p,
+            None => {
+                cap.advice = format!("未找到无线网卡 {if_} 的 phy 信息(可能不是无线网卡)。");
+                return cap;
+            }
+        };
+        let out = match Command::new("iw").args(["phy", &phy, "info"]).output() {
+            Ok(o) if o.status.success() => o,
+            _ => {
+                cap.advice = "无法运行 iw 检测网卡能力(可执行 sudo apt install iw 后重试)。".into();
+                return cap;
+            }
+        };
+        let text = String::from_utf8_lossy(&out.stdout);
+        cap.detected = true;
+        cap.band_24 = text.contains("Band 1:");
+        cap.band_5 = text.contains("Band 2:");
+        cap.sta_band = sta_band(if_);
+        cap.ap_supported = section_lines(&text, "Supported interface modes:")
+            .iter()
+            .any(|l| l.trim() == "* AP");
+
+        // 解析「valid interface combinations」判断能否 STA+AP 并发
+        let combos = section_lines(&text, "interface combinations:").join(" ");
+        for entry in combos.split('*').skip(1) {
+            if entry.contains("managed") && entry.contains("AP") && parse_total(entry) >= 2 {
+                cap.concurrent = true;
+                if entry.contains("channels <= 1") {
+                    cap.same_channel_only = true;
+                }
+            }
+        }
+
+        if !cap.ap_supported {
+            cap.level = "block".into();
+            cap.advice = "本网卡不支持 AP(热点)模式,无法开热点。请改用「局域网代理」共享。".into();
+        } else if !cap.concurrent {
+            cap.level = "block".into();
+            cap.advice =
+                "本网卡是单射频,不能边连 WiFi 上网边开热点(强行开会断网甚至卡死)。请改用「局域网代理」共享。"
+                    .into();
+        } else if cap.same_channel_only {
+            cap.level = "warn".into();
+            let b = if cap.sta_band.is_empty() {
+                "当前 WiFi".to_string()
+            } else {
+                format!("当前 WiFi({})", cap.sta_band)
+            };
+            cap.advice = format!(
+                "本网卡为单射频:开热点必须与{b}同信道,应用会自动把热点锁到该信道(你选的频段会被忽略)。若未连 WiFi 或仍失败,请改用「局域网代理」更稳。"
+            );
+        } else {
+            cap.level = "ok".into();
+            cap.advice = "本网卡支持边上网边开热点。".into();
+        }
+        cap
+    }
+
+    /// 把 nmcli 的原始报错翻译成对用户更友好的提示。
+    fn friendly_nmcli_err(raw: &str, band: &str) -> String {
+        let r = raw.trim();
+        if r.contains("802.1X") || r.contains("请求方") || r.contains("supplicant") {
+            let hint = if band == "a" {
+                "5GHz 常因单射频不能与上网同时进行而失败,改 2.4GHz 或用「局域网代理」"
+            } else {
+                "多为单射频网卡无法并发,建议用「局域网代理」"
+            };
+            format!("网卡无法建立热点({hint}):{r}")
+        } else if r.contains("ip-config-unavailable") || r.contains("IP configuration") {
+            format!("热点 IP 配置失败(常因 53 端口被占,如 Clash Verge 的 DNS):{r}")
+        } else if r.contains("not supported") || r.contains("不支持") {
+            format!("本网卡不支持该热点配置,请改用「局域网代理」:{r}")
+        } else {
+            format!("开启热点失败:{r}")
+        }
+    }
 
     pub fn list_wifi_devices() -> Vec<String> {
         Command::new("nmcli")
@@ -104,27 +287,54 @@ mod imp {
         if ssid.is_empty() || password.len() < 8 {
             return Err("SSID 不能为空,且密码至少 8 位".into());
         }
+        let if_ = if ifname.is_empty() { "wlan0" } else { ifname };
+        // 开热点前先探测网卡能力:不支持 AP / 不能并发时直接拦截,避免把网卡搞卡
+        let cap = wifi_capability(if_);
+        if cap.detected && cap.level == "block" {
+            return Err(cap.advice);
+        }
         // 有进程占 53(如 Verge 的 DNS)时,先修复 NM 热点 dnsmasq 的 53 冲突
         if dns53_busy() {
             ensure_dnsmasq_fix()?;
         }
-        let if_ = if ifname.is_empty() { "wlan0" } else { ifname };
-        let mut args: Vec<&str> = vec![
+
+        // 频段/信道:同射频网卡(same_channel_only)必须与当前 WiFi 同信道,
+        // 否则跨信道切换会失败甚至卡死。此时强制锁到 station 当前的频段+信道。
+        let (mut use_band, mut channel): (String, Option<u32>) = (band.to_string(), None);
+        if cap.detected && cap.same_channel_only {
+            if let Some((b, ch)) = sta_chan(if_) {
+                use_band = b;
+                channel = Some(ch);
+            }
+        }
+
+        let mut args: Vec<String> = vec![
             "device", "wifi", "hotspot", "ifname", if_, "con-name", CON_NAME, "ssid", ssid,
             "password", password,
-        ];
-        if band == "bg" || band == "a" {
-            args.push("band");
-            args.push(band);
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+        if use_band == "bg" || use_band == "a" {
+            args.push("band".into());
+            args.push(use_band.clone());
+        }
+        if let Some(ch) = channel {
+            args.push("channel".into());
+            args.push(ch.to_string());
         }
         let out = Command::new("nmcli")
             .args(&args)
             .output()
             .map_err(|e| format!("调用 nmcli 失败: {e}"))?;
         if !out.status.success() {
-            return Err(format!(
-                "开启热点失败: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
+            // nmcli 失败时清掉残留的连接档,避免越积越多
+            let _ = Command::new("nmcli")
+                .args(["connection", "delete", CON_NAME])
+                .output();
+            return Err(friendly_nmcli_err(
+                &String::from_utf8_lossy(&out.stderr),
+                band,
             ));
         }
         Ok(())
@@ -178,11 +388,22 @@ mod imp {
 // ===== Windows:netsh hostednetwork(共享网段默认 192.168.137.0/24)=====
 #[cfg(windows)]
 mod imp {
-    use super::HotspotStatus;
+    use super::{HotspotStatus, WifiCapability};
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Output};
 
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    /// Windows 下不做 iw 级探测,交给 netsh 在启动时报错;给出通用建议。
+    pub fn wifi_capability(ifname: &str) -> WifiCapability {
+        WifiCapability {
+            ifname: if ifname.is_empty() { "wlan".into() } else { ifname.into() },
+            detected: false,
+            level: "unknown".into(),
+            advice: "Windows 下热点能力由系统决定;若开启失败,可改用系统「移动热点」或本应用的「局域网代理」共享。".into(),
+            ..Default::default()
+        }
+    }
 
     fn netsh(args: &[&str]) -> Result<Output, String> {
         Command::new("netsh")
@@ -283,4 +504,4 @@ mod imp {
     }
 }
 
-pub use imp::{lan_ip, list_wifi_devices, start, status, stop, subnet};
+pub use imp::{lan_ip, list_wifi_devices, start, status, stop, subnet, wifi_capability};

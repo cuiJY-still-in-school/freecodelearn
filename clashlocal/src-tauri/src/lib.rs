@@ -105,6 +105,12 @@ fn lan_ip() -> Option<String> {
     kernel::hotspot::lan_ip()
 }
 
+/// 探测无线网卡能力(支不支持 AP、能否并发、频段),给热点页判断与建议用。
+#[tauri::command]
+fn wifi_capability(app: tauri::AppHandle) -> kernel::hotspot::WifiCapability {
+    kernel::hotspot::wifi_capability(&kernel::settings::load(&app).hotspot_ifname)
+}
+
 /// 是否已完成一次性管理员授权。
 #[tauri::command]
 fn admin_granted() -> bool {
@@ -449,6 +455,7 @@ pub fn run() {
             list_wifi_devices,
             set_transparent,
             set_local_mode,
+            wifi_capability,
             set_auto_start_core,
             save_mixed_port,
             admin_granted,

@@ -27,6 +27,17 @@ interface HotspotStatus {
   subnet: string | null
   gateway: string | null
 }
+interface WifiCap {
+  detected: boolean
+  ap_supported: boolean
+  concurrent: boolean
+  same_channel_only: boolean
+  band_24: boolean
+  band_5: boolean
+  sta_band: string
+  level: string
+  advice: string
+}
 
 const BANDS = [
   { v: '', label: '自动' },
@@ -45,6 +56,7 @@ export default function Hotspot() {
   const [lanIp, setLanIp] = useState<string | null>(null)
   const [port, setPort] = useState(7893)
   const [status, setStatus] = useState<HotspotStatus | null>(null)
+  const [cap, setCap] = useState<WifiCap | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -65,6 +77,11 @@ export default function Hotspot() {
       } catch {
         setLanIp(null)
       }
+      try {
+        setCap(await invoke<WifiCap>('wifi_capability'))
+      } catch {
+        setCap(null)
+      }
     } catch (e) {
       setErr(String(e))
     }
@@ -77,6 +94,11 @@ export default function Hotspot() {
   const active = status?.active ?? false
   const isLinux = platform === 'linux'
   const ifOptions = devices.length ? Array.from(new Set([ifname, ...devices])) : [ifname]
+  const blocked = !!cap?.detected && cap.level === 'block'
+  const capSeverity = (cap?.level === 'block' ? 'error' : cap?.level === 'warn' ? 'warning' : 'success') as
+    | 'error'
+    | 'warning'
+    | 'success'
 
   const toggleHotspot = async () => {
     setBusy(true)
@@ -124,7 +146,7 @@ export default function Hotspot() {
 
       <Alert severity="success" sx={{ mb: 2, maxWidth: 720 }}>
         推荐:<b>局域网代理</b>(下方)。本机与手机连同一个 WiFi/路由器,手机把代理填成「本机IP:{port}」即可走 VPN,
-        <b>无需管理员、无需开热点</b>。下面的「WiFi 热点」需要双网卡并发,本机单 5GHz 网卡无法边连网边发热点,通常用不了。
+        <b>无需管理员、无需开热点</b>。热点能否使用取决于网卡能力,下方已自动检测。
       </Alert>
 
       {err && (
@@ -166,12 +188,31 @@ export default function Hotspot() {
                 variant={active ? 'outlined' : 'contained'}
                 color={active ? 'error' : 'primary'}
                 onClick={toggleHotspot}
-                disabled={busy}
+                disabled={busy || (!active && blocked)}
                 sx={{ minWidth: 100 }}
               >
                 {active ? '关闭热点' : '开启热点'}
               </Button>
             </Stack>
+            {isLinux && cap && (
+              <Alert
+                severity={cap.detected ? capSeverity : 'info'}
+                sx={{ mb: 2 }}
+                icon={false}
+              >
+                <Typography variant="body2">
+                  <b>网卡检测</b>:{cap.advice}
+                </Typography>
+                {cap.detected && (
+                  <Typography variant="caption" color="text.secondary">
+                    AP 模式 {cap.ap_supported ? '✓' : '✗'} · 边上网边开热点{' '}
+                    {cap.concurrent ? (cap.same_channel_only ? '受限(需同信道)' : '✓') : '✗'} · 频段{' '}
+                    {[cap.band_24 && '2.4G', cap.band_5 && '5G'].filter(Boolean).join('/') || '—'}
+                    {cap.sta_band && ` · 当前 ${cap.sta_band}`}
+                  </Typography>
+                )}
+              </Alert>
+            )}
             <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
               <TextField
                 size="small"
