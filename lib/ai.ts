@@ -4,6 +4,7 @@ import { getSettings, newCourseId, saveCourse } from "./store";
 export interface GenerateInput {
   topic: string;
   level: Course["level"];
+  chapters?: number;
   description?: string;
 }
 
@@ -57,7 +58,7 @@ JSON 结构:
 2. 总步骤数 10-16 个;lesson 约占一半,challenge 3-5 个,quiz 每章 1 个
 3. 最后一章包含一个综合 quiz
 4. challenge 步骤的 brief 中写明:函数签名、输入输出要求、边界情况(如空数组)
-5. 章节数由你根据主题复杂度自主决定(3-5 章),内容适度即可,不要注水`;
+5. 章节数按用户指定的数字(1-12),内容适度即可,不要注水`;
 
 const CHAPTER_TASK = `你是课程内容作者。根据大纲中的一章,撰写完整的课程内容,输出严格的 JSON。
 
@@ -168,8 +169,10 @@ function parseJSON(content: string): Record<string, unknown> {
 /* ---------- 大纲生成 ---------- */
 
 export async function generateOutline(input: GenerateInput): Promise<CourseOutline> {
-  const userPrompt = `请设计课程大纲。\n主题:${input.topic}\n难度:${input.level}\n${
-    input.description ? `补充说明:${input.description}` : ""
+  const userPrompt = `请设计课程大纲。\n主题:${input.topic}\n难度:${input.level}${
+    input.chapters ? `\n章节数:${input.chapters}` : ""
+  }${
+    input.description ? `\n补充说明:${input.description}` : ""
   }\n\n${OUTLINE_TASK}`;
 
   const content = await chat(userPrompt, true);
@@ -326,6 +329,83 @@ export async function generateChapter(
   }
 
   return steps;
+}
+
+/* ---------- 追加章节 ---------- */
+
+const APPEND_TASK = `你是课程内容作者。为已有课程追加一个全新的章节,输出严格 JSON。
+
+JSON 结构:
+{"steps": [步骤数组,格式与单章生成完全一致(见下方说明)]}
+
+步骤格式与生成规则(与单章生成相同):
+- lesson:{"type":"lesson","bodyMarkdown":"图文讲解(markdown)"}
+- challenge:{"type":"challenge","bodyMarkdown":"题目要求","starterCode":"初始代码","solution":"完整参考解答","tests":"判题测试(约定:JS/CSS/HTML 用代码断言,CSS/HTML 必须有 html 字段;其他语言用户输入在 __fcl_input 中,用 __fcl_input.includes 断言)","html":"仅 CSS/HTML 需要"}
+- quiz:{"type":"quiz","questions":[{"question":"题干","options":["A","B","C"],"correctIndex":0,"explanation":"解析"}]}(3-5 题,选项互不重复,correctIndex 在范围内)
+- 每个挑战必须同时提供 starterCode、solution、tests;quiz 必须有 questions
+- bodyMarkdown 用简体中文,循序渐进,与课程既有风格一致
+- 只输出 JSON,不要多余文字`;
+
+export async function appendChapter(
+  course: Pick<Course, "title" | "language" | "level" | "description">,
+  chapterTitle: string
+): Promise<Step[]> {
+  const existing = course.description ? `\n课程简介:${course.description}` : "";
+  const userPrompt = `课程标题:${course.title}${existing}
+课程语言:${course.language}
+课程难度:${course.level}
+
+请追加新章节「${chapterTitle}」,包含 3-5 个步骤(lesson + challenge + quiz 混合,quiz 放最后)。\n\n${APPEND_TASK}`;
+
+  const content = await chat(userPrompt, true);
+  const raw = parseJSON(content);
+  const rawSteps = Array.isArray(raw.steps) ? raw.steps : [];
+  if (rawSteps.length === 0) throw new Error("AI 没有返回有效步骤");
+
+  const steps: Step[] = rawSteps.map((rs, i) => {
+    const r = rs as Record<string, unknown>;
+    const type = ["lesson", "challenge", "quiz"].includes(String(r.type))
+      ? (String(r.type) as Step["type"])
+      : "lesson";
+    const step: Step = {
+      id: `append-${i + 1}`,
+      title: String(r.title ?? `步骤 ${i + 1}`),
+      type,
+      bodyMarkdown: r.bodyMarkdown ? String(r.bodyMarkdown) : undefined,
+      language: course.language,
+    };
+    if (type === "challenge") {
+      step.starterCode = r.starterCode ? String(r.starterCode) : undefined;
+      step.solution = r.solution ? String(r.solution) : undefined;
+      step.tests = r.tests ? String(r.tests) : undefined;
+      step.html = r.html ? String(r.html) : undefined;
+    }
+    if (type === "quiz" && Array.isArray(r.questions)) {
+      step.questions = r.questions.map((q) => {
+        const qu = q as Record<string, unknown>;
+        return {
+          question: String(qu.question ?? ""),
+          options: Array.isArray(qu.options) ? qu.options.map((o) => String(o)) : [],
+          correctIndex: Number(qu.correctIndex ?? 0),
+          explanation: qu.explanation ? String(qu.explanation) : undefined,
+        };
+      });
+    }
+    return step;
+  });
+
+  // 补测试与 starter/solution
+  const challenges = steps.filter((s) => s.type === "challenge" && !s.tests);
+  await Promise.all(
+    challenges.map(async (s) => {
+      try {
+        await generateTests(s);
+      } catch {
+        // 忽略
+      }
+    })
+  );
+  return sanitizeSteps(steps);
 }
 
 /* ---------- 组装保存 ---------- */

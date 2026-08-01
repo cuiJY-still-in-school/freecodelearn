@@ -49,6 +49,11 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // GitHub 设置
+  const [ghClientId, setGhClientId] = useState("");
+  const [ghRepo, setGhRepo] = useState("freecodelearn-courses");
+  const [ghSaved, setGhSaved] = useState(false);
+
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
@@ -58,7 +63,30 @@ export default function SettingsPage() {
         setModel(d.model ?? "");
       })
       .finally(() => setLoading(false));
+    fetch("/api/github-settings")
+      .then((r) => r.json())
+      .then((d) => {
+        setGhClientId(d.clientId ?? "");
+        setGhRepo(d.repoName ?? "freecodelearn-courses");
+      });
   }, []);
+
+  async function saveGithub(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/github-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: ghClientId, repoName: ghRepo }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "保存失败");
+      setGhSaved(true);
+      setTimeout(() => setGhSaved(false), 2500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+    }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -181,6 +209,53 @@ AI_MODEL=gpt-4o`}
           ,不会上传。
         </p>
       </div>
+
+      <h2 className="mb-1 mt-12 font-serif text-2xl font-bold tracking-tight">
+        GitHub 关联
+      </h2>
+      <p className="mb-6 text-sm text-ink-soft">
+        填写 GitHub OAuth App 的 Client ID(无需注册回调,使用设备码授权)。登录后可将课程发布到你的 GitHub 仓库。
+      </p>
+      <form
+        onSubmit={saveGithub}
+        className="rounded-2xl border border-line bg-card p-6 shadow-sm"
+      >
+        <label className="mb-1.5 block text-sm font-medium text-ink">
+          GitHub Client ID
+        </label>
+        <input
+          value={ghClientId}
+          onChange={(e) => setGhClientId(e.target.value)}
+          placeholder="例如:Ov23li..."
+          className="mb-4 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+        />
+        <label className="mb-1.5 block text-sm font-medium text-ink">
+          公开课程仓库名
+        </label>
+        <input
+          value={ghRepo}
+          onChange={(e) => setGhRepo(e.target.value)}
+          placeholder="freecodelearn-courses"
+          className="mb-4 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+        />
+        <p className="mb-4 text-xs text-ink-soft">
+          发布课程时自动创建该仓库(如不存在),课程 JSON 存到
+          <code className="mx-1 rounded bg-bg-subtle px-1.5 py-0.5 font-mono text-xs">
+            courses/课程id.json
+          </code>
+        </p>
+        {ghSaved && (
+          <div className="pop mb-4 rounded-xl border border-green/20 bg-green-soft px-4 py-3 text-sm text-green">
+            ✓ 已保存
+          </div>
+        )}
+        <button
+          type="submit"
+          className="w-full rounded-xl bg-ink py-3 text-sm font-semibold text-bg transition hover:bg-accent"
+        >
+          保存 GitHub 配置
+        </button>
+      </form>
     </div>
   );
 }

@@ -24,6 +24,8 @@ export interface CourseMeta {
   createdAt: string;
   stepCount: number;
   chapterCount: number;
+  ownerLogin?: string;
+  isPublic?: boolean;
 }
 
 async function ensureDirs() {
@@ -111,6 +113,8 @@ export function toMeta(course: Course): CourseMeta {
     createdAt: course.createdAt,
     stepCount,
     chapterCount: course.chapters.length,
+    ownerLogin: course.ownerLogin,
+    isPublic: course.isPublic,
   };
 }
 

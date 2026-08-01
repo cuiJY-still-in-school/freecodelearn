@@ -69,6 +69,9 @@ export default function CoursePlayer({ course }: { course: Course }) {
     return flat.length ? flat[flat.length - 1].step.id : firstStepId(course);
   });
   const [mobileNav, setMobileNav] = useState(false);
+  const [appendTitle, setAppendTitle] = useState("");
+  const [appending, setAppending] = useState(false);
+  const [appendMsg, setAppendMsg] = useState("");
   const [progress, setProgress] = useState<ProgressMap>(() =>
     loadProgress(course.id)
   );
@@ -309,6 +312,53 @@ export default function CoursePlayer({ course }: { course: Course }) {
                 </button>
               )
             )}
+          </div>
+
+          {/* 追加章节 */}
+          <div className="mt-10 rounded-2xl border border-dashed border-line p-6">
+            <h3 className="font-serif text-base font-bold">扩展课程</h3>
+            <p className="mt-1 text-xs text-ink-soft">
+              由 AI 为这门课程追加一个全新章节(3-5 个步骤)
+            </p>
+            <form
+              className="mt-3 flex gap-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!appendTitle.trim() || appending) return;
+                setAppending(true);
+                setAppendMsg("");
+                try {
+                  const res = await fetch(`/api/courses/${course.id}/chapters`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title: appendTitle.trim() }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error ?? "追加失败");
+                  setAppendMsg("章节已追加,刷新中...");
+                  window.location.reload();
+                } catch (err) {
+                  setAppendMsg(err instanceof Error ? err.message : "追加失败");
+                } finally {
+                  setAppending(false);
+                }
+              }}
+            >
+              <input
+                value={appendTitle}
+                onChange={(e) => setAppendTitle(e.target.value)}
+                placeholder="新章节标题,例如:高阶技巧"
+                className="flex-1 rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent"
+              />
+              <button
+                type="submit"
+                disabled={appending || !appendTitle.trim()}
+                className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {appending ? "生成中..." : "追加章节"}
+              </button>
+            </form>
+            {appendMsg && <p className="mt-2 text-xs text-ink-soft">{appendMsg}</p>}
           </div>
         </div>
       </div>
