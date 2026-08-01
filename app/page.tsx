@@ -49,15 +49,13 @@ export default function HomePage() {
   // 表单
   const [topic, setTopic] = useState("");
   const [level, setLevel] = useState<"beginner" | "intermediate" | "advanced">("beginner");
-  const [language, setLanguage] = useState("JavaScript");
-  const [chapters, setChapters] = useState(4);
   const [extra, setExtra] = useState("");
   const [formError, setFormError] = useState("");
 
   // 流程
-  const [phase, setPhase] = useState<"input" | "outline" | "generating" | "done">("input");
+  const [phase, setPhase] = useState<"input" | "generating" | "done">("input");
   const [outline, setOutline] = useState<CourseOutline | null>(null);
-  const [outlineLoading, setOutlineLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [chapterStates, setChapterStates] = useState<ChapterState[]>([]);
 
   useEffect(() => {
@@ -74,41 +72,40 @@ export default function HomePage() {
     setCourses(await res.json());
   }
 
-  async function generateOutline(e: React.FormEvent) {
+  async function generateCourse(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
-    setOutlineLoading(true);
+    setGenerating(true);
     try {
       const res = await fetch("/api/ai/outline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, level, language, chapters, description: extra || undefined }),
+        body: JSON.stringify({ topic, level, description: extra || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "大纲生成失败");
       setOutline(data);
-      setChapterStates(data.chapters.map(() => ({ status: "pending" })));
-      setPhase("outline");
+      await generateAll(data);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "大纲生成失败");
+      setFormError(err instanceof Error ? err.message : "课程生成失败");
+      setPhase("input");
     } finally {
-      setOutlineLoading(false);
+      setGenerating(false);
     }
   }
 
-  async function generateAll() {
-    if (!outline) return;
+  async function generateAll(outlineData: CourseOutline) {
     setPhase("generating");
-    const states = outline.chapters.map(() => ({ status: "working" as const }));
+    const states = outlineData.chapters.map(() => ({ status: "working" as const }));
     setChapterStates(states);
 
     const results = await Promise.all(
-      outline.chapters.map(async (_, i) => {
+      outlineData.chapters.map(async (_, i) => {
         try {
           const res = await fetch("/api/ai/chapter", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ outline, chapterIndex: i }),
+            body: JSON.stringify({ outline: outlineData, chapterIndex: i }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error ?? "生成失败");
@@ -131,7 +128,7 @@ export default function HomePage() {
         const res = await fetch("/api/ai/assemble", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ outline, chapters: results }),
+          body: JSON.stringify({ outline: outlineData, chapters: results }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "保存失败");
@@ -199,7 +196,7 @@ export default function HomePage() {
       {/* 生成流程 */}
       {phase === "input" && (
         <form
-          onSubmit={generateOutline}
+          onSubmit={generateCourse}
           className="fade-up mx-auto max-w-2xl rounded-2xl border border-line bg-card p-8 shadow-sm"
         >
           <label className="mb-1.5 block text-sm font-medium text-ink">
@@ -215,10 +212,8 @@ export default function HomePage() {
           <div className="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
             {[
               { label: "难度", value: level, set: (v: string) => setLevel(v as typeof level), options: [["beginner", "入门"], ["intermediate", "进阶"], ["advanced", "高级"]] },
-              { label: "语言", value: language, set: setLanguage, options: ["JavaScript", "Python", "TypeScript", "Java", "Go", "Rust", "HTML/CSS", "SQL", "Shell"].map((l) => [l, l]) },
-              { label: "章节数", value: String(chapters), set: (v: string) => setChapters(Number(v)), options: [["3", "3 章"], ["4", "4 章"], ["5", "5 章"], ["6", "6 章"]] },
             ].map((f) => (
-              <div key={f.label}>
+              <div key={f.label} className="max-w-[12rem]">
                 <label className="mb-1 block text-sm text-ink-soft">{f.label}</label>
                 <select
                   value={f.value}
@@ -247,83 +242,22 @@ export default function HomePage() {
           )}
           <button
             type="submit"
-            disabled={outlineLoading || !topic.trim()}
+            disabled={generating || !topic.trim()}
             className="w-full rounded-xl bg-ink py-3 text-[15px] font-semibold text-bg transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {outlineLoading ? (
+            {generating ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-bg/30 border-t-bg" />
-                正在设计课程大纲...
+                正在生成课程...
               </span>
             ) : (
-              "生成课程大纲"
+              "生成课程"
             )}
           </button>
           <p className="mt-3 text-center text-xs text-ink-soft">
-            先设计大纲,确认后再生成完整内容 —— 生成进度一目了然
+            输入主题即可,编程语言由 AI 自动判断 —— 生成完成后直接进入学习
           </p>
         </form>
-      )}
-
-      {/* 大纲预览 */}
-      {phase === "outline" && outline && (
-        <div className="fade-up mx-auto max-w-3xl">
-          <div className="mb-6 rounded-2xl border border-line bg-card p-6 shadow-sm">
-            <div className="mb-1 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="font-serif text-2xl font-bold">{outline.title}</h2>
-                <p className="mt-1 text-sm text-ink-soft">{outline.description}</p>
-              </div>
-              <span className="shrink-0 rounded-full border border-line bg-bg-subtle px-3 py-1 text-xs text-ink-soft">
-                {LEVEL_LABEL[outline.level]} · {outline.language} · 约{" "}
-                {outline.estimatedMinutes} 分钟
-              </span>
-            </div>
-            <div className="mt-4 flex items-center gap-2">
-              <button
-                onClick={generateAll}
-                className="rounded-xl bg-ink px-5 py-2.5 text-sm font-semibold text-bg transition hover:bg-accent"
-              >
-                开始生成完整内容
-              </button>
-              <button
-                onClick={() => setPhase("input")}
-                className="rounded-xl border border-line px-5 py-2.5 text-sm text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
-              >
-                重新设计
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {outline.chapters.map((c, ci) => (
-              <div
-                key={ci}
-                className="rounded-2xl border border-line bg-card p-5 shadow-sm"
-              >
-                <h3 className="mb-2 font-serif text-lg font-bold">
-                  {ci + 1}. {c.title}
-                </h3>
-                <p className="mb-3 text-xs text-ink-soft">{c.description}</p>
-                <div className="flex flex-wrap gap-2">
-                  {c.steps.map((s, si) => {
-                    const meta = STEP_TYPE_LABEL[s.type];
-                    return (
-                      <span
-                        key={si}
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${meta.cls}`}
-                        title={s.brief}
-                      >
-                        <span>{meta.icon}</span>
-                        {s.title}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       )}
 
       {/* 并行生成 */}
