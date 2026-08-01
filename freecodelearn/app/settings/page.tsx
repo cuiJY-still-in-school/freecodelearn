@@ -2,49 +2,78 @@
 
 import { useEffect, useState } from "react";
 
-const PRESETS = [
+const PRESETS: {
+  name: string;
+  provider: string;
+  baseUrl: string;
+  model: string;
+  parseMethod: "openai" | "anthropic";
+  hint: string;
+}[] = [
   {
     name: "OpenCode Zen(免费)",
+    provider: "OpenCode Zen",
     baseUrl: "https://opencode.ai/zen/v1",
     model: "deepseek-v4-flash-free",
+    parseMethod: "openai",
     hint: "免费额度约 100 次/天,无需信用卡",
   },
   {
     name: "OpenAI",
+    provider: "OpenAI",
     baseUrl: "https://api.openai.com/v1",
     model: "gpt-4o",
+    parseMethod: "openai",
     hint: "",
   },
   {
+    name: "Anthropic Claude",
+    provider: "Anthropic",
+    baseUrl: "https://api.anthropic.com/v1",
+    model: "claude-sonnet-4-20250514",
+    parseMethod: "anthropic",
+    hint: "使用 Anthropic Messages API 协议",
+  },
+  {
     name: "DeepSeek",
+    provider: "DeepSeek",
     baseUrl: "https://api.deepseek.com/v1",
     model: "deepseek-chat",
+    parseMethod: "openai",
     hint: "",
   },
   {
     name: "Moonshot Kimi",
+    provider: "Moonshot",
     baseUrl: "https://api.moonshot.cn/v1",
     model: "kimi-k2",
+    parseMethod: "openai",
     hint: "",
   },
   {
     name: "通义千问",
+    provider: "阿里云",
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     model: "qwen-plus",
+    parseMethod: "openai",
     hint: "",
   },
   {
     name: "本地 Ollama",
+    provider: "Ollama",
     baseUrl: "http://localhost:11434/v1",
     model: "llama3",
+    parseMethod: "openai",
     hint: "需先 ollama pull 一个模型",
   },
 ];
 
 export default function SettingsPage() {
+  const [provider, setProvider] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("");
+  const [parseMethod, setParseMethod] = useState<"openai" | "anthropic">("openai");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -58,9 +87,11 @@ export default function SettingsPage() {
     fetch("/api/settings")
       .then((r) => r.json())
       .then((d) => {
+        setProvider(d.provider ?? "自定义");
         setBaseUrl(d.baseUrl ?? "");
         setApiKey(d.apiKey ?? "");
         setModel(d.model ?? "");
+        setParseMethod(d.parseMethod === "anthropic" ? "anthropic" : "openai");
       })
       .finally(() => setLoading(false));
     fetch("/api/github-settings")
@@ -96,7 +127,7 @@ export default function SettingsPage() {
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ baseUrl, apiKey, model }),
+        body: JSON.stringify({ provider, baseUrl, apiKey, model, parseMethod }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "保存失败");
@@ -108,8 +139,10 @@ export default function SettingsPage() {
   }
 
   function applyPreset(p: (typeof PRESETS)[number]) {
+    setProvider(p.provider);
     setBaseUrl(p.baseUrl);
     setModel(p.model);
+    setParseMethod(p.parseMethod);
     setSaved(false);
     setError("");
   }
@@ -120,7 +153,7 @@ export default function SettingsPage() {
         AI 服务设置
       </h1>
       <p className="mb-8 text-sm text-ink-soft">
-        支持任何 OpenAI 兼容协议的服务。选一个预设,或手动填写。
+        选择服务商预设或手动填写。解析方法决定请求协议:OpenAI 兼容或 Anthropic 兼容。
       </p>
 
       <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -144,6 +177,38 @@ export default function SettingsPage() {
         onSubmit={save}
         className="rounded-2xl border border-line bg-card p-6 shadow-sm"
       >
+        <label className="mb-1.5 block text-sm font-medium text-ink">
+          Provider(服务商)
+        </label>
+        <input
+          value={provider}
+          onChange={(e) => setProvider(e.target.value)}
+          placeholder="OpenCode Zen / OpenAI / Anthropic / 自定义..."
+          className="mb-4 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+        />
+        <label className="mb-1.5 block text-sm font-medium text-ink">
+          解析方法(协议格式)
+        </label>
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          {[
+            { v: "openai" as const, l: "OpenAI 兼容", d: "/chat/completions · Bearer" },
+            { v: "anthropic" as const, l: "Anthropic 兼容", d: "/messages · x-api-key" },
+          ].map((o) => (
+            <button
+              key={o.v}
+              type="button"
+              onClick={() => setParseMethod(o.v)}
+              className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                parseMethod === o.v
+                  ? "border-accent bg-accent-soft"
+                  : "border-line bg-bg hover:border-accent/40"
+              }`}
+            >
+              <span className="block text-sm font-medium">{o.l}</span>
+              <span className="block text-[11px] text-ink-soft">{o.d}</span>
+            </button>
+          ))}
+        </div>
         <label className="mb-1.5 block text-sm font-medium text-ink">
           Base URL
         </label>
@@ -199,7 +264,9 @@ export default function SettingsPage() {
         <pre className="overflow-x-auto rounded-xl bg-[#1f1e1d] p-4 font-mono text-xs text-[#e8e6e1]">
           {`AI_BASE_URL=https://api.openai.com/v1
 AI_API_KEY=sk-...
-AI_MODEL=gpt-4o`}
+AI_MODEL=gpt-4o
+AI_PROVIDER=OpenAI
+AI_PARSE_METHOD=openai   # 或 anthropic`}
         </pre>
         <p className="mt-3 text-xs text-ink-soft">
           环境变量优先级低于网页设置。密钥仅保存在本机

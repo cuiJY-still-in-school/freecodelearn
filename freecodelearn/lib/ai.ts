@@ -115,7 +115,7 @@ async function chat(
   const settings = await getSettings();
   if (!settings || !settings.apiKey) {
     throw new Error(
-      "未配置 AI 服务。请先在「设置」页填写 baseUrl / apiKey / model,或设置环境变量 AI_BASE_URL、AI_API_KEY、AI_MODEL"
+      "未配置 AI 服务。请先在「设置」页填写 provider / baseUrl / apiKey / model,或设置环境变量 AI_BASE_URL、AI_API_KEY、AI_MODEL"
     );
   }
 
@@ -123,6 +123,42 @@ async function chat(
     /\/+$/,
     ""
   );
+  const method = settings.parseMethod ?? "openai";
+
+  if (method === "anthropic") {
+    const response = await fetch(`${baseUrl}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": settings.apiKey,
+        "anthropic-version": "2023-06-01",
+        ...(json ? { "anthropic-beta": "json-20250507" } : {}),
+      },
+      body: JSON.stringify({
+        model: settings.model,
+        max_tokens: 8192,
+        temperature: 0.7,
+        system: json
+          ? `${SYSTEM_PROMPT}\n\n严格输出 JSON,不要任何多余文字或 markdown 代码块。`
+          : SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userPrompt }],
+      }),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`AI 服务请求失败 (${response.status}): ${text.slice(0, 300)}`);
+    }
+    const data = await response.json();
+    const content: string =
+      (Array.isArray(data?.content)
+        ? data.content
+            .map((b: { text?: string }) => b?.text ?? "")
+            .join("")
+        : "") ?? "";
+    if (!content) throw new Error("AI 返回为空,请检查模型配置");
+    return content;
+  }
+
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
