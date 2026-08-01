@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: personalac-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - pac-data:/var/lib/personalac/data
+    environment:
+      PORT: 3000
+      DATA_DIR: /var/lib/personalac/data
+      NODE_ENV: production
+      # 必须修改为强随机字符串
+      ENCRYPT_SECRET: ${ENCRYPT_SECRET:-change-this-before-deploy}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/auth/me', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # 前端静态资源由 nginx 服务（可选，也可由 server 直接托管）
+  nginx:
+    image: nginx:alpine
+    container_name: personalac-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - server
+
+volumes:
+  pac-data:
+    driver: local

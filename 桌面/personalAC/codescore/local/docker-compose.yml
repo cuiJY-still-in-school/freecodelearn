@@ -1,0 +1,26 @@
+version: '3.9'
+
+services:
+  personalac:
+    build: .
+    image: personalac:latest
+    container_name: personalac
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - personalac_data:/data
+    environment:
+      - NODE_ENV=production
+      - DATA_DIR=/data
+      - PORT=3000
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/auth/me', r => process.exit(r.statusCode === 401 ? 0 : 0)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  personalac_data:
+    driver: local

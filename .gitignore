@@ -80,7 +80,40 @@ test-*.js
 .*
 !/.gitignore
 !/.gitattributes
+# Large or unrelated local directories
+/go/
+/skip/
+/switch/
+/turbowarp/
+/snap/
+/Android/
+/PycharmProjects/
+/下载/
+/公共/
+/图片/
+/文档/
+/Setup Guide In-Editor Tutorial/
+/桌面/WebHelper-Browser/
+/桌面/aimate/
+/桌面/project/
+/桌面/pvz/
+/桌面/sqlad/
+/桌面/mom/
+/桌面/deepseek/
+/桌面/deepseeksetup/
+/桌面/github/
+/桌面/kimi code plan/
+/桌面/claude --resume c0c513bd-85cb-490e-9fd6-a60ba40f6b40/
+/桌面/商业服务器测试指南.md
 
-# Project configuration files are now in coclaw/ directory
-# !/.eslintrc.json - moved to coclaw/
-# !/.github/ - moved to coclaw/.github/
+# Sensitive or binary files
+/桌面/password
+/桌面/redeem_codes.txt
+/桌面/PersonalAC技术设计文档.md
+*.AppImage
+*.tar.gz
+*.zip
+*.x86_64
+*.png
+*.icns
+/LangGraph-GUI/

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="colorPrimary">#D97757</item>
+        <item name="colorPrimaryDark">#1C1917</item>
+        <item name="colorAccent">#D97757</item>
+        <item name="android:windowBackground">#1C1917</item>
+        <item name="android:statusBarColor">#1C1917</item>
+        <item name="android:navigationBarColor">#1C1917</item>
+    </style>
+
+    <style name="SetupDialog" parent="Theme.AppCompat.Light.Dialog.Alert">
+        <item name="colorAccent">#D97757</item>
+        <item name="android:background">#F9F7F4</item>
+        <item name="android:textColorPrimary">#1A1815</item>
+    </style>
+</resources>

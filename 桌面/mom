@@ -1,0 +1,4 @@
+openclaw --profile mom  configure
+
+openclaw --profile mom gateway --port 18790
+

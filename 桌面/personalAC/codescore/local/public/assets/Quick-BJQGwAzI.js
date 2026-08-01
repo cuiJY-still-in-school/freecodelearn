@@ -1,0 +1,1 @@
+import{j as r}from"./index-pRwbgo6E.js";import t from"./Chat-yOZVsdhw.js";import"./vendor-md-DziqzRrN.js";function m(){return r.jsx("div",{style:{height:"100vh",background:"var(--bg)"},children:r.jsx(t,{minimal:!0})})}export{m as default};

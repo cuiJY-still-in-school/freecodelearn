@@ -1,0 +1,1 @@
+import{j as r,i as t}from"./mui-BKK2rCnj.js";import{r as a}from"./Logout-CKjvWuMO.js";var e={},o=t;Object.defineProperty(e,"__esModule",{value:!0});var u=e.default=void 0,i=o(a()),d=r;u=e.default=(0,i.default)((0,d.jsx)("path",{d:"M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"}),"Send");export{u as d};

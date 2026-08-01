@@ -1,0 +1,376 @@
+import React, { useState, useEffect } from 'react'
+import Login from './Login'
+
+interface Props { onLogin: () => void }
+
+function Icon({ d, size = 20 }: { d: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
+  )
+}
+
+const FEATURES = [
+  {
+    icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+    title: 'AI 学习伙伴',
+    desc: '随时提问，AI 记住薄弱点、讲解卡点、换方法重讲。每次对话都有上下文，不是无记忆的问答机器。',
+    tags: ['"这道题我不会"', '"换一种方法解释"'],
+    color: '#D97757',
+  },
+  {
+    icon: 'M4 6h16M4 10h16M4 14h10',
+    title: '拍照 & OCR 识别',
+    desc: '拍照上传试卷、作业、截图，AI 自动识别文字并分析。直接拍，不需要手打题目。',
+    tags: ['"分析这张试卷"', '"帮我看看这道题"'],
+    color: '#7B6CF6',
+  },
+  {
+    icon: 'M9 2v6m6-6v6M3 10h18M5 20h14a2 2 0 0 0 2-2V10H3v8a2 2 0 0 0 2 2z',
+    title: '智能待办',
+    desc: '家长布置任务，AI 实时提醒孩子。对话里说一句，自动建待办、设优先级、到期提醒。',
+    tags: ['"帮我记一个任务"', '"我有哪些待办？"'],
+    color: '#3B82F6',
+  },
+  {
+    icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+    title: '定时唤醒',
+    desc: 'AI 自主安排提醒，到时间主动推送消息。不需要手动设日历，对话里说一句就够。',
+    tags: ['"明天晚8点提醒我背单词"', '"三天后问我这道题"'],
+    color: '#10B981',
+  },
+  {
+    icon: 'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z',
+    title: '知识点追踪',
+    desc: 'AI 自动记录学过什么、哪里卡住了。掌握程度用置信度量化，每次对话后动态更新。',
+    tags: ['"我会了二次函数"', '"哪里还没掌握？"'],
+    color: '#F59E0B',
+  },
+  {
+    icon: 'M9 19v-6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2zm0 0V9a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v10m-6 0a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m0 0V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z',
+    title: 'SRS 间隔复习',
+    desc: '基于记忆曲线的复习系统。对话中标记「加入复习」，系统按最优间隔提醒回温，防止遗忘。',
+    tags: ['对话中点「加入复习」', '"今天要复习什么？"'],
+    color: '#EC4899',
+  },
+  {
+    icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+    title: '家校联动',
+    desc: '家长和孩子共用一套 AI，互相看到进度。家长发图给孩子、布置任务、查看学情报告。',
+    tags: ['"孩子今天学了什么？"', '"给孩子发一条提醒"'],
+    color: '#6366F1',
+  },
+  {
+    icon: 'M19 11H7m12 0-4-4m4 4-4 4M3 5v14',
+    title: '成绩 & 进度管理',
+    desc: '录入考试成绩，AI 分析趋势和薄弱学科。学习打卡记录连续天数，一目了然。',
+    tags: ['"这次数学85分"', '"最近进步了吗？"'],
+    color: '#0EA5E9',
+  },
+  {
+    icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l5 5v11a2 2 0 0 1-2 2z',
+    title: '学情周报',
+    desc: '每周自动生成学情报告并推送给家长。包含知识点掌握情况、待办完成率、薄弱分析和 AI 建议。',
+    tags: ['每周自动推送', '可随时在线查看'],
+    color: '#14B8A6',
+  },
+  {
+    icon: 'M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10a7 7 0 0 1-14 0M12 19v3M8 22h8',
+    title: '语音输入',
+    desc: '长按麦克风说话，松开自动识别，可编辑后发送。解放双手，不方便打字时快速提问。',
+    tags: ['长按麦克风说话', '识别结果可修改再发'],
+    color: '#F97316',
+  },
+  {
+    icon: 'M6.5 6.5h11M12 3v18M3 12h18',
+    title: 'WolframAlpha 精确计算',
+    desc: '遇到数学题、物理公式、方程组，AI 调用 WolframAlpha 给出精确步骤，不是估算。',
+    tags: ['"解方程 x²+3x-4=0"', '"积分 sinx dx"'],
+    color: '#EF4444',
+  },
+  {
+    icon: 'M5 12H3l9-9 9 9h-2M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7',
+    title: '工作区文件',
+    desc: '笔记、截图同步到工作区，家长和孩子都能访问。AI 可以读写文件，帮你整理学习资料。',
+    tags: ['"帮我把笔记存到工作区"', '"工作区里有什么？"'],
+    color: '#8B5CF6',
+  },
+]
+
+const HOW = [
+  { step: '01', title: '家长注册', desc: '邮箱注册，填写孩子姓名和科目，生成邀请码。注册即享 7 天免费使用。' },
+  { step: '02', title: '孩子激活', desc: '输入邀请码，设置密码，推荐绑定邮箱用于多设备登录。' },
+  { step: '03', title: '开始对话', desc: 'AI 已了解孩子的科目和目标，第一句话就有完整上下文。' },
+]
+
+interface DlInfo { available: boolean; size: number; url: string | null }
+interface DownloadInfo { windows: DlInfo; mac: DlInfo; android: DlInfo }
+
+function fmtSize(b: number) {
+  if (!b) return ''
+  return b < 1024 * 1024 ? `${(b / 1024).toFixed(0)} KB` : `${(b / 1024 / 1024).toFixed(0)} MB`
+}
+
+export default function Landing({ onLogin }: Props): React.ReactElement {
+  const [showLogin, setShowLogin] = useState(false)
+  const [dlInfo, setDlInfo] = useState<DownloadInfo | null>(null)
+
+  useEffect(() => {
+    fetch('/download/info').then(r => r.json()).then(setDlInfo).catch(() => {})
+  }, [])
+
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', fontFamily: 'system-ui,-apple-system,sans-serif', color: 'var(--text)' }}>
+      <style>{`
+        @keyframes slideUp { from { transform: translateY(60px); opacity: 0 } to { transform: none; opacity: 1 } }
+        .landing-btn-primary {
+          padding: 11px 28px; border-radius: 10px; background: var(--primary); border: none;
+          color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+          transition: opacity .15s;
+        }
+        .landing-btn-primary:hover { opacity: .88; }
+        .landing-btn-outline {
+          padding: 11px 28px; border-radius: 10px; background: transparent;
+          border: 1px solid var(--border); color: var(--text); font-size: 15px; font-weight: 600;
+          text-decoration: none; display: inline-flex; align-items: center;
+          transition: border-color .15s;
+        }
+        .landing-btn-outline:hover { border-color: var(--text-muted); }
+        .feature-card {
+          background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+          padding: 22px 22px 18px; transition: box-shadow .15s;
+        }
+        .feature-card:hover { box-shadow: var(--shadow-md); }
+        @media (max-width: 600px) {
+          .hero-ctas { flex-direction: column; align-items: stretch !important; }
+          .hero-ctas a, .hero-ctas button { justify-content: center; }
+          .how-steps { display: flex !important; flex-direction: column; gap: 28px !important; }
+          .how-step { border-right: none !important; border-bottom: 1px solid rgba(255,255,255,0.08); padding: 0 0 28px !important; }
+          .how-step:last-child { border-bottom: none; padding-bottom: 0 !important; }
+          .docs-cta-row { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
+          .footer-row { flex-direction: column; align-items: flex-start !important; }
+        }
+      `}</style>
+
+      {/* ── Topbar ── */}
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 100,
+        background: 'var(--bg)', backdropFilter: 'blur(14px)',
+        borderBottom: '1px solid var(--border)',
+        padding: '0 clamp(20px,5vw,64px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        height: 54,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <span style={{ fontWeight: 700, fontSize: 14, letterSpacing: '-0.02em' }}>PersonalAC</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <a href="/docs" style={{ fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500, padding: '6px 12px' }}>文档</a>
+          <button onClick={() => setShowLogin(true)} style={{
+            padding: '7px 18px', borderRadius: 8,
+            background: 'var(--primary)', border: 'none',
+            color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          }}>登录</button>
+        </div>
+      </div>
+
+      {/* ── Hero ── */}
+      <div style={{ padding: 'clamp(52px,9vw,100px) clamp(20px,5vw,64px) clamp(40px,6vw,64px)', maxWidth: 760, margin: '0 auto', textAlign: 'center' }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '4px 14px', borderRadius: 20,
+          background: 'var(--primary-light)', border: '1px solid var(--primary-ring)',
+          fontSize: 12, fontWeight: 600, color: 'var(--primary)', marginBottom: 24, letterSpacing: '0.02em',
+        }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="#D97757" stroke="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          注册立享 7 天免费体验
+        </div>
+        <h1 style={{ fontSize: 'clamp(28px,6vw,54px)', fontWeight: 800, lineHeight: 1.15, letterSpacing: '-0.035em', margin: '0 0 18px' }}>
+          一个真正了解你孩子<br />的 AI 学习伙伴
+        </h1>
+        <p style={{ fontSize: 'clamp(14px,2vw,16px)', color: 'var(--text-muted)', lineHeight: 1.7, margin: '0 auto 36px', maxWidth: 500 }}>
+          不只是聊天——PersonalAC 记住每一个知识点、每一次卡壳，
+          帮孩子系统学习，让家长随时掌握进度。
+        </p>
+        <div className="hero-ctas" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button className="landing-btn-primary" onClick={() => setShowLogin(true)}>免费开始使用</button>
+          <a href="#features" className="landing-btn-outline">了解所有功能</a>
+        </div>
+      </div>
+
+      {/* ── Features ── */}
+      <div id="features" style={{ padding: 'clamp(40px,6vw,72px) clamp(20px,5vw,64px)', maxWidth: 1160, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 48 }}>
+          <h2 style={{ fontSize: 'clamp(20px,4vw,30px)', fontWeight: 800, letterSpacing: '-0.03em', margin: '0 0 10px' }}>一句话能做到的事</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>对 AI 说出来，它帮你搞定——以下都是真实可用的功能</p>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(280px,100%),1fr))', gap: 14 }}>
+          {FEATURES.map((f, i) => (
+            <div key={i} className="feature-card">
+              <div style={{ width: 38, height: 38, borderRadius: 9, background: f.color + '14', display: 'flex', alignItems: 'center', justifyContent: 'center', color: f.color, marginBottom: 12 }}>
+                <Icon d={f.icon} />
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 7 }}>{f.title}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.65, marginBottom: 12 }}>{f.desc}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {f.tags.map((t, j) => (
+                  <code key={j} style={{ fontSize: 11.5, color: 'var(--text-muted)', background: 'var(--bg-secondary)', borderRadius: 5, padding: '3px 8px', fontFamily: 'monospace', display: 'block' }}>{t}</code>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── How ── */}
+      <div style={{ background: '#1A1815', padding: 'clamp(48px,7vw,80px) clamp(20px,5vw,64px)' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', textAlign: 'center', marginBottom: 48 }}>
+          <h2 style={{ fontSize: 'clamp(20px,4vw,30px)', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', margin: 0 }}>三步开始使用</h2>
+        </div>
+        <div className="how-steps" style={{ maxWidth: 900, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 0 }}>
+          {HOW.map((h, i) => (
+            <div
+              key={i}
+              className="how-step"
+              style={{
+                padding: `0 ${i < HOW.length - 1 ? 32 : 0}px 0 ${i > 0 ? 32 : 0}px`,
+                borderRight: i < HOW.length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none',
+              }}
+            >
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', letterSpacing: '0.08em', marginBottom: 12 }}>{h.step}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 8, letterSpacing: '-0.02em' }}>{h.title}</div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.65 }}>{h.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Client Download ── */}
+      {(() => {
+        const PLATFORMS = [
+          { key: 'android' as const, label: 'Android', sub: 'APK 直接安装', icon: 'M17.523 15.341a.88.88 0 0 1-.88.879.88.88 0 0 1-.879-.879.88.88 0 0 1 .879-.879.88.88 0 0 1 .88.879zm-10.166 0a.88.88 0 0 1-.879.879.88.88 0 0 1-.879-.879.88.88 0 0 1 .879-.879.88.88 0 0 1 .879.879zm10.556-5.623l1.757-3.044a.368.368 0 0 0-.134-.502.368.368 0 0 0-.502.134l-1.779 3.08a10.61 10.61 0 0 0-4.255-.878c-1.523 0-2.97.32-4.254.878L7.066 6.306a.368.368 0 0 0-.502-.134.368.368 0 0 0-.134.502l1.757 3.044C5.963 11.06 4.682 13.3 4.682 15.83h14.636c0-2.53-1.281-4.77-3.405-6.112z', color: '#10B981' },
+          { key: 'windows' as const, label: 'Windows', sub: '解压后运行 .exe', icon: 'M3 5.5L11 4.3V11.5H3V5.5ZM3 12.5H11V19.7L3 18.5V12.5ZM12 4.1L21 2.8V11.5H12V4.1ZM12 12.5H21V21.2L12 19.9V12.5Z', color: '#3B82F6' },
+          { key: 'mac' as const, label: 'Mac', sub: 'DMG 拖入应用程序', icon: 'M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z', color: '#6366F1' },
+        ]
+        return (
+          <div style={{ background: 'var(--bg-card)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: 'clamp(40px,6vw,64px) clamp(20px,5vw,64px)' }}>
+            <div style={{ maxWidth: 900, margin: '0 auto' }}>
+              <div style={{ marginBottom: 28 }}>
+                <h2 style={{ fontSize: 'clamp(18px,3.5vw,26px)', fontWeight: 800, letterSpacing: '-0.03em', margin: '0 0 8px' }}>学生端客户端下载</h2>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>安装在孩子设备上，支持必做任务锁定、截图监控、应用黑名单</p>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                {PLATFORMS.map((p, i) => {
+                  const info = dlInfo?.[p.key]
+                  const available = info?.available ?? false
+                  const size = available ? fmtSize(info!.size) : ''
+                  const Tag = available ? 'a' : 'div'
+                  return (
+                    <Tag key={i} {...(available ? { href: `/download/${p.key}` } : {})} style={{
+                      display: 'flex', alignItems: 'center', gap: 14, minWidth: 200,
+                      padding: '16px 20px', borderRadius: 12, textDecoration: 'none',
+                      border: `1px solid ${available ? 'var(--border)' : 'var(--border)'}`,
+                      opacity: available ? 1 : 0.55,
+                      cursor: available ? 'pointer' : 'default',
+                      transition: 'border-color .15s, box-shadow .15s',
+                    } as React.CSSProperties}
+                      {...(available ? {
+                        onMouseEnter: (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.borderColor = p.color; (e.currentTarget as HTMLElement).style.boxShadow = `0 2px 12px ${p.color}22` },
+                        onMouseLeave: (e: React.MouseEvent<HTMLElement>) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLElement).style.boxShadow = 'none' },
+                      } : {})}
+                    >
+                      <div style={{ width: 38, height: 38, borderRadius: 9, background: p.color + '14', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill={p.color} stroke="none">
+                          <path d={p.icon} />
+                        </svg>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' }}>{p.label}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                          {available ? (p.sub + (size ? ` · ${size}` : '')) : '即将发布'}
+                        </div>
+                      </div>
+                      {available && (
+                        <svg style={{ marginLeft: 'auto', flexShrink: 0 }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D8D4CF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                        </svg>
+                      )}
+                    </Tag>
+                  )
+                })}
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 16, marginBottom: 0 }}>
+                仅学生端需要安装。家长和孩子也可以只用网页版，客户端为可选增强。
+                <a href="/docs" style={{ color: 'var(--primary)', marginLeft: 6, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 2 }}>了解客户端功能 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></a>
+              </p>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Docs CTA ── */}
+      <div className="docs-cta-row" style={{ padding: 'clamp(40px,6vw,64px) clamp(20px,5vw,64px)', display: 'flex', gap: 20, alignItems: 'center', justifyContent: 'space-between', maxWidth: 900, margin: '0 auto', flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>想了解每个功能的详细用法？</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>查看完整文档，包含示例对话和操作说明</div>
+        </div>
+        <a href="/docs" style={{
+          padding: '10px 24px', borderRadius: 9, background: 'transparent',
+          border: '1px solid var(--border)', color: 'var(--text)', fontSize: 13, fontWeight: 600,
+          textDecoration: 'none', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4,
+        }}>查看文档 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></a>
+      </div>
+
+      {/* ── CTA bottom ── */}
+      <div style={{ borderTop: '1px solid #E8E4DF', padding: 'clamp(40px,6vw,64px) clamp(20px,5vw,64px)', textAlign: 'center' }}>
+        <h2 style={{ fontSize: 'clamp(18px,3.5vw,26px)', fontWeight: 800, letterSpacing: '-0.03em', margin: '0 0 10px' }}>现在就开始</h2>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 20px' }}>注册即送 7 天免费体验，到期后联系微信续费。</p>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: 'var(--primary-light)', borderRadius: 10, padding: '12px 20px', marginBottom: 24 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+          </svg>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>续期联系微信：<code style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary)', background: 'transparent' }}>kaixin_jason</code></span>
+        </div>
+        <br />
+        <button className="landing-btn-primary" onClick={() => setShowLogin(true)} style={{ padding: '12px 32px', fontSize: 15 }}>
+          免费注册
+        </button>
+      </div>
+
+      {/* ── Footer ── */}
+      <div className="footer-row" style={{ borderTop: '1px solid #E8E4DF', padding: '18px clamp(20px,5vw,64px)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>PersonalAC</span>
+        <div style={{ display: 'flex', gap: 20 }}>
+          <a href="/docs" style={{ fontSize: 12, color: 'var(--text-muted)', textDecoration: 'none' }}>文档</a>
+          <a href="/join" style={{ fontSize: 12, color: 'var(--text-muted)', textDecoration: 'none' }}>邀请码激活</a>
+        </div>
+      </div>
+
+      {/* ── Login Sheet ── */}
+      {showLogin && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(26,24,21,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowLogin(false) }}
+        >
+          <div style={{ width: '100%', maxWidth: 480, background: 'var(--bg)', borderRadius: '20px 20px 0 0', maxHeight: '92vh', overflowY: 'auto', animation: 'slideUp .25s ease-out' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px 0' }}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>登录 PersonalAC</span>
+              <button onClick={() => setShowLogin(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'flex', borderRadius: 4 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <Login onLogin={onLogin} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

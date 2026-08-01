@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#17191E" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://models.dev https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.resend.com"
+    />
+    <title>PersonalAC</title>
+    <script>(function(){var t=localStorage.getItem('pac-theme')||(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');document.documentElement.dataset.theme=t})()</script>
+    <script>window.__pac_err=[];window.onerror=function(m,s,l,c,e){window.__pac_err.push({m:m,s:s,l:l,c:c,e:e&&e.toString()});var d=document.getElementById('pac-err');if(d){d.style.display='block';d.textContent='JS错误: '+m+' ('+s+':'+l+')';}}</script>
+  </head>
+  <body>
+    <div id="pac-err" style="display:none;position:fixed;top:0;left:0;right:0;padding:10px 16px;background:#c00;color:#fff;font-size:13px;font-family:monospace;z-index:99999;white-space:pre-wrap;"></div>
+    <div id="root"></div>
+    <script type="module" src="./src/main.tsx"></script>
+  </body>
+</html>
