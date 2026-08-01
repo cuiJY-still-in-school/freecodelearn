@@ -247,8 +247,21 @@ ${HARNESS_SUFFIX}
         </div>
       )}
 
-      {!tests && solution && (
+      {solution && (
         <div className="border-t border-line px-5 py-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-ink-soft">
+              {showSolution ? "参考答案" : "卡住了?可以看看参考答案"}
+            </span>
+            {showSolution && (
+              <button
+                onClick={() => setShowSolution(false)}
+                className="text-xs text-ink-soft transition hover:text-ink"
+              >
+                收起
+              </button>
+            )}
+          </div>
           {showSolution ? (
             <pre className="overflow-x-auto rounded-xl bg-[#1f1e1d] p-4 font-mono text-xs text-[#e8e6e1]">
               {solution}

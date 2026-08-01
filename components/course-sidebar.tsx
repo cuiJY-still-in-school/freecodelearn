@@ -14,6 +14,7 @@ interface Props {
   currentStepId: string;
   progress: ProgressMap;
   onNavigate: (stepId: string) => void;
+  className?: string;
 }
 
 export default function CourseSidebar({
@@ -21,9 +22,14 @@ export default function CourseSidebar({
   currentStepId,
   progress,
   onNavigate,
+  className,
 }: Props) {
   return (
-    <aside className="sticky top-14 h-[calc(100vh-3.5rem)] w-72 shrink-0 overflow-y-auto border-r border-line bg-card/60 p-5">
+    <aside
+      className={`sticky top-14 h-[calc(100vh-3.5rem)] w-72 shrink-0 overflow-y-auto border-r border-line bg-card/60 p-5 ${
+        className ?? ""
+      }`}
+    >
       <h1 className="mb-1 font-serif text-lg font-bold leading-snug text-ink">
         {course.title}
       </h1>
