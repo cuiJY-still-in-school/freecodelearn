@@ -126,6 +126,17 @@ export default function QuizView({ questions, onComplete }: Props) {
           {allCorrect
             ? `✓ 全部答对 (${score}/${questions.length})!测验通过,即将继续下一项`
             : `得分 ${score}/${questions.length},答对全部题目后才能通过`}
+          {!allCorrect && (
+            <button
+              onClick={() => {
+                setAnswers(questions.map(() => null));
+                setChecked(false);
+              }}
+              className="mt-3 rounded-xl border border-amber-500/40 bg-white px-4 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
+            >
+              重新作答
+            </button>
+          )}
         </div>
       )}
     </div>

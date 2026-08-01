@@ -68,6 +68,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
     if (firstUndone) return firstUndone.step.id;
     return flat.length ? flat[flat.length - 1].step.id : firstStepId(course);
   });
+  const [mobileNav, setMobileNav] = useState(false);
   const [progress, setProgress] = useState<ProgressMap>(() =>
     loadProgress(course.id)
   );
@@ -110,16 +111,37 @@ export default function CoursePlayer({ course }: { course: Course }) {
 
   return (
     <div className="flex">
+      {mobileNav && (
+        <div
+          className="fixed inset-0 z-30 bg-ink/40 backdrop-blur-sm lg:hidden"
+          onClick={() => setMobileNav(false)}
+        />
+      )}
       <CourseSidebar
         course={course}
         currentStepId={currentId}
         progress={progress}
-        onNavigate={goTo}
+        onNavigate={(id) => {
+          goTo(id);
+          setMobileNav(false);
+        }}
+        className={`fixed inset-y-0 left-0 z-40 -translate-x-full transition-transform duration-300 lg:static lg:top-14 lg:h-[calc(100vh-3.5rem)] lg:translate-x-0 ${
+          mobileNav ? "translate-x-0" : ""
+        }`}
       />
       <div className="min-w-0 flex-1">
         {/* 进度条 */}
         <div className="border-b border-line bg-card/70 px-6 py-3 backdrop-blur">
           <div className="mx-auto flex max-w-3xl items-center gap-4">
+            <button
+              onClick={() => setMobileNav(true)}
+              className="shrink-0 rounded-lg border border-line p-1.5 text-ink-soft transition hover:bg-bg-subtle hover:text-ink lg:hidden"
+              aria-label="打开课程目录"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M3 6h18M3 12h18M3 18h18" />
+              </svg>
+            </button>
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
               <div
                 className="h-full rounded-full bg-accent transition-all duration-700"
