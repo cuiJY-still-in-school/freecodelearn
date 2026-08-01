@@ -7,10 +7,14 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const COURSES_DIR = path.join(DATA_DIR, "courses");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 
+export type ParseMethod = "openai" | "anthropic";
+
 export interface AISettings {
+  provider: string;
   baseUrl: string;
   apiKey: string;
   model: string;
+  parseMethod: ParseMethod;
 }
 
 export interface CourseMeta {
@@ -89,12 +93,21 @@ export async function saveSettings(settings: AISettings): Promise<void> {
 export async function getSettings(): Promise<AISettings | null> {
   try {
     const raw = await fs.readFile(SETTINGS_FILE, "utf8");
-    return JSON.parse(raw) as AISettings;
+    const parsed = JSON.parse(raw) as Partial<AISettings>;
+    return {
+      provider: parsed.provider ?? "自定义",
+      baseUrl: parsed.baseUrl ?? "",
+      apiKey: parsed.apiKey ?? "",
+      model: parsed.model ?? "",
+      parseMethod: parsed.parseMethod ?? "openai",
+    };
   } catch {
     const env = {
+      provider: process.env.AI_PROVIDER ?? "环境变量",
       baseUrl: process.env.AI_BASE_URL ?? "",
       apiKey: process.env.AI_API_KEY ?? "",
       model: process.env.AI_MODEL ?? "",
+      parseMethod: (process.env.AI_PARSE_METHOD ?? "openai") as ParseMethod,
     };
     return env.baseUrl || env.apiKey || env.model ? env : null;
   }
