@@ -37,6 +37,9 @@ export interface Course {
   estimatedMinutes: number;
   createdAt: string;
   chapters: Chapter[];
+  ownerId?: string;
+  ownerLogin?: string;
+  isPublic?: boolean;
 }
 
 export function flattenSteps(course: Course): { chapter: Chapter; step: Step }[] {
