@@ -202,6 +202,14 @@ function parseJSON(content: string): Record<string, unknown> {
   }
 }
 
+/* ---------- 连接测试 ---------- */
+
+export async function chatTest(): Promise<string> {
+  const content = await chat("只回复两个字:正常。不要其他任何内容。", false);
+  if (!content) throw new Error("AI 返回为空");
+  return content;
+}
+
 /* ---------- 大纲生成 ---------- */
 
 export async function generateOutline(input: GenerateInput): Promise<CourseOutline> {

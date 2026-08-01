@@ -63,9 +63,24 @@ export default function ChallengeRunner({
   const [running, setRunning] = useState(false);
   const [timeoutMsg, setTimeoutMsg] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
+  const [copied, setCopied] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settledRef = useRef(false);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        runRef.current?.();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const runRef = useRef<(() => void) | null>(null);
+  runRef.current = () => run();
 
   const isCSS = /css|html/i.test(language ?? "");
   const isJS = /javascript/i.test(language ?? "");
@@ -192,8 +207,9 @@ ${HARNESS_SUFFIX}
             onClick={run}
             disabled={running}
             className="rounded-lg bg-ink px-4 py-1.5 text-xs font-semibold text-bg transition hover:bg-accent disabled:opacity-50"
+            title="快捷键:Ctrl + Enter"
           >
-            {running ? "运行中..." : "运行测试"}
+            {running ? "运行中..." : "运行测试 ⌘⏎"}
           </button>
         </div>
       </div>
@@ -282,9 +298,25 @@ ${HARNESS_SUFFIX}
             )}
           </div>
           {showSolution ? (
-            <pre className="overflow-x-auto rounded-xl bg-[#1f1e1d] p-4 font-mono text-xs text-[#e8e6e1]">
-              {solution}
-            </pre>
+            <div className="relative">
+              <pre className="overflow-x-auto rounded-xl bg-[#1f1e1d] p-4 font-mono text-xs text-[#e8e6e1]">
+                {solution}
+              </pre>
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(solution);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  } catch {
+                    setCopied(false);
+                  }
+                }}
+                className="absolute right-2 top-2 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] text-white/70 transition hover:bg-white/15 hover:text-white"
+              >
+                {copied ? "✓ 已复制" : "复制"}
+              </button>
+            </div>
           ) : (
             <button
               onClick={() => setShowSolution(true)}
