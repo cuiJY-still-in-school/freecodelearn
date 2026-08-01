@@ -4,8 +4,6 @@ import { getSettings, newCourseId, saveCourse } from "./store";
 export interface GenerateInput {
   topic: string;
   level: Course["level"];
-  language: string;
-  chapters?: number;
   description?: string;
 }
 
@@ -41,7 +39,7 @@ JSON 结构:
   "description": "一两句课程简介(面向学习者,写清楚学完能获得什么)",
   "topic": "主题",
   "level": "beginner|intermediate|advanced",
-  "language": "编程语言",
+  "language": "根据主题推断的编程语言或工具语言(JavaScript、Python、HTML/CSS、SQL、Shell、Go 等;命令行/工具类主题必须用其命令语言如 Shell/Git,不要写「无代码」;仅纯概念主题才可用「无代码」)",
   "estimatedMinutes": 预计学习总分钟数,
   "chapters": [
     {
@@ -59,7 +57,7 @@ JSON 结构:
 2. 总步骤数 10-16 个;lesson 约占一半,challenge 3-5 个,quiz 每章 1 个
 3. 最后一章包含一个综合 quiz
 4. challenge 步骤的 brief 中写明:函数签名、输入输出要求、边界情况(如空数组)
-5. 章节数按用户要求,默认 4 章`;
+5. 章节数由你根据主题复杂度自主决定(3-5 章),内容适度即可,不要注水`;
 
 const CHAPTER_TASK = `你是课程内容作者。根据大纲中的一章,撰写完整的课程内容,输出严格的 JSON。
 
@@ -96,15 +94,18 @@ challenge tests 约定(JavaScript,运行在浏览器沙箱中):
       const el = document.querySelector(".container");
       assert(getComputedStyle(el).display === "flex", "display 应该为 flex");
     });
+- 其他语言(Shell/Git/SQL/命令工具等)的挑战也必须有 tests:用户输入作为字符串保存在 __fcl_input 中,测试用字符串断言,例如:
+  test("包含 git init", () => {
+    assert(__fcl_input.includes("git init"), "应包含 git init 命令");
+  });
 - 必须覆盖正常情况和边界情况(空数组、负数、0 等),至少 2 个测试
 - 不要依赖未导入的外部库
 
 写作要求:
 1. 严格遵循大纲中该章步骤的 title/type/brief,顺序一致,不要增删步骤
 2. bodyMarkdown 用简体中文,讲解要具体、有示例,循序渐进
-3. 语言为 Python/Java/Go/Rust/Shell 等其他语言时:challenge 步骤省略 tests 和 html,在 bodyMarkdown 中给详细解答,并保留 solution
-4. 语言为 JavaScript/CSS/HTML 时,每个 challenge 必须同时提供 starterCode、solution、tests 三个字段(CSS/HTML 再加 html),不得缺失
-5. 只输出 JSON,不要多余文字`;
+3. 所有语言的 challenge 都必须提供 starterCode(可编辑的初始内容,JS/CSS/HTML 为代码,其他语言为示例命令/文本)、solution(完整参考解答)、tests(按上面的约定);CSS/HTML 再加 html
+4. 只输出 JSON,不要多余文字`;
 
 async function chat(
   userPrompt: string,
@@ -167,7 +168,7 @@ function parseJSON(content: string): Record<string, unknown> {
 /* ---------- 大纲生成 ---------- */
 
 export async function generateOutline(input: GenerateInput): Promise<CourseOutline> {
-  const userPrompt = `请设计课程大纲。\n主题:${input.topic}\n难度:${input.level}\n编程语言:${input.language}\n章节数:${input.chapters ?? 4}\n${
+  const userPrompt = `请设计课程大纲。\n主题:${input.topic}\n难度:${input.level}\n${
     input.description ? `补充说明:${input.description}` : ""
   }\n\n${OUTLINE_TASK}`;
 
@@ -207,7 +208,7 @@ export async function generateOutline(input: GenerateInput): Promise<CourseOutli
     description: String(raw.description ?? `关于${input.topic}的课程`),
     topic: input.topic,
     level: input.level,
-    language: input.language,
+    language: String(raw.language ?? "JavaScript"),
     estimatedMinutes: Number(raw.estimatedMinutes ?? 30) || 30,
     chapters,
   };
@@ -216,12 +217,14 @@ export async function generateOutline(input: GenerateInput): Promise<CourseOutli
 /* ---------- 单章内容生成 ---------- */
 
 const TEST_TASK = `你是测试工程师。为下面的代码挑战编写自动判题测试,输出严格 JSON(不要任何多余文字):
-{"tests": "JavaScript 测试代码", "html": "CSS/HTML 语言时提供的测试 DOM 结构,JS 语言则为空字符串"}
+{"tests": "JavaScript 测试代码", "html": "CSS/HTML 语言时提供的测试 DOM 结构,其他语言为空字符串"}
 
 测试约定(运行在浏览器沙箱中):
 - test(name, fn) 定义测试,fn 内用 assert(condition, message)
 - JS 语言:用户函数在测试前自动执行,直接调用
 - CSS/HTML 语言:用户 CSS 会作为 <style> 注入;html 必须包含测试引用的所有元素;用 document.querySelector 和 getComputedStyle 断言
+- 其他语言(Shell/Git/SQL 等):用户输入保存在 __fcl_input 字符串中,用 __fcl_input.includes(...) 等字符串断言,例如:
+  test("包含 git init", () => { assert(__fcl_input.includes("git init"), "应包含 git init"); });
 - 至少 2 个测试,覆盖正常情况和边界情况
 - 只输出 JSON`;
 
@@ -280,22 +283,19 @@ export async function generateChapter(
     return step;
   });
 
-  // 为 JS/CSS/HTML 语言的挑战补充自动判题测试(独立小请求,可靠性更高)
-  const autoTestable = /javascript|css|html/i.test(outline.language);
-  if (autoTestable) {
-    const challenges = steps.filter(
-      (s) => s.type === "challenge" && !s.tests
-    );
-    await Promise.all(
-      challenges.map(async (s) => {
-        try {
-          await generateTests(s);
-        } catch {
-          // 测试生成失败则降级:无自动判题,保留查看解答
-        }
-      })
-    );
-  }
+  // 为所有缺测试的挑战补充自动判题(JS/CSS/HTML 用代码模式,其他语言用 __fcl_input 文本断言)
+  const challenges = steps.filter(
+    (s) => s.type === "challenge" && !s.tests
+  );
+  await Promise.all(
+    challenges.map(async (s) => {
+      try {
+        await generateTests(s);
+      } catch {
+        // 测试生成失败则降级:无自动判题,保留查看解答
+      }
+    })
+  );
   // 补全缺失的 starterCode / solution(保证学习页体验完整)
   const incomplete = steps.filter(
     (s) =>

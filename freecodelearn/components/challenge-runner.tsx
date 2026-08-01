@@ -68,6 +68,8 @@ export default function ChallengeRunner({
   const settledRef = useRef(false);
 
   const isCSS = /css|html/i.test(language ?? "");
+  const isJS = /javascript/i.test(language ?? "");
+  const isText = !isCSS && !isJS;
 
   const handleMessage = useCallback(
     (e: MessageEvent) => {
@@ -100,8 +102,10 @@ export default function ChallengeRunner({
     settledRef.current = false;
 
     // CSS/HTML 挑战:用户代码作为 <style> 注入,html 字段作为测试页面 DOM
-    const body = isCSS
-      ? `<!DOCTYPE html><html><head><meta charset="utf-8">
+    // 其他语言(Shell/Git/SQL 等):用户输入注入为 __fcl_input 字符串,测试用字符串断言
+    let body: string;
+    if (isCSS) {
+      body = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
 ${escapeStyle(code)}
 </style>
@@ -116,8 +120,22 @@ ${escapeScript(tests)}
 }
 ${HARNESS_SUFFIX}
 <\/script>
-</body></html>`
-      : `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
+</body></html>`;
+    } else if (isText) {
+      body = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
+<script>
+const __fcl_input = ${JSON.stringify(code)};
+${HARNESS_PREFIX}
+try {
+${escapeScript(tests)}
+} catch (e) {
+  __fcl.fatal = "测试执行出错: " + String((e && e.message) || e);
+}
+${HARNESS_SUFFIX}
+<\/script>
+</body></html>`;
+    } else {
+      body = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
 ${html ?? ""}
 <script>
 ${HARNESS_PREFIX}
@@ -130,6 +148,7 @@ ${escapeScript(tests)}
 ${HARNESS_SUFFIX}
 <\/script>
 </body></html>`;
+    }
 
     const iframe = iframeRef.current;
     if (!iframe) return;
@@ -160,7 +179,7 @@ ${HARNESS_SUFFIX}
             <span className="h-2.5 w-2.5 rounded-full bg-amber-400/60" />
             <span className="h-2.5 w-2.5 rounded-full bg-green/60" />
           </span>
-          代码编辑器
+          {isText ? "答题区(输入你的命令或文本)" : "代码编辑器"}
         </span>
         <div className="flex gap-2">
           <button
@@ -183,7 +202,7 @@ ${HARNESS_SUFFIX}
         onChange={setCode}
         height="260px"
         theme="dark"
-        extensions={[isCSS ? css() : javascript()]}
+        extensions={isCSS ? [css()] : isJS ? [javascript()] : []}
         basicSetup={{ autocompletion: false }}
         className="text-sm"
       />

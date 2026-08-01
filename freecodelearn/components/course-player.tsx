@@ -90,6 +90,18 @@ export default function CoursePlayer({ course }: { course: Course }) {
     [course.id]
   );
 
+  const unmark = useCallback(
+    (id: string) => {
+      setProgress((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        saveProgress(course.id, next);
+        return next;
+      });
+    },
+    [course.id]
+  );
+
   function goTo(id: string) {
     setCurrentId(id);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -183,8 +195,17 @@ export default function CoursePlayer({ course }: { course: Course }) {
               {STEP_BADGE[step.type]}
             </span>
             {isDone && (
-              <span className="rounded-full border border-green/30 bg-green-soft px-2.5 py-0.5 text-xs font-medium text-green">
-                ✓ 已完成
+              <span className="flex items-center gap-1.5">
+                <span className="rounded-full border border-green/30 bg-green-soft px-2.5 py-0.5 text-xs font-medium text-green">
+                  ✓ 已完成
+                </span>
+                <button
+                  onClick={() => unmark(step.id)}
+                  className="rounded-full border border-line px-2.5 py-0.5 text-xs text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
+                  title="撤销完成状态,重新学习"
+                >
+                  标记为未完成
+                </button>
               </span>
             )}
           </div>
