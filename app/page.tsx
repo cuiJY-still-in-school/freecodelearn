@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { CourseMeta } from "@/lib/store";
 import type { CourseOutline } from "@/lib/ai";
 import type { Step } from "@/lib/types";
+import { loadProgress } from "@/lib/progress";
 
 const LEVEL_LABEL: Record<string, string> = {
   beginner: "入门",
@@ -396,7 +397,13 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {courses.map((c) => (
+            {courses.map((c) => {
+              const prog = loadProgress(c.id);
+              const done = Object.values(prog).filter(Boolean).length;
+              const pct = c.stepCount
+                ? Math.min(100, Math.round((done / c.stepCount) * 100))
+                : 0;
+              return (
               <Link
                 key={c.id}
                 href={`/courses/${c.id}`}
@@ -429,8 +436,22 @@ export default function HomePage() {
                   <span>{c.language}</span>
                   <span>约 {c.estimatedMinutes} 分钟</span>
                 </div>
+                {pct > 0 && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+                      <div
+                        className="h-full rounded-full bg-accent transition-all duration-700"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="font-mono text-xs text-ink-soft">
+                      {pct}%
+                    </span>
+                  </div>
+                )}
               </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
