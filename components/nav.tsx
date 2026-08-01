@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import LoginButton from "@/components/login-button";
 
 export default function Nav() {
+  const pathname = usePathname();
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-bg/85 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
@@ -15,16 +20,26 @@ export default function Nav() {
         <nav className="flex items-center gap-1 text-sm text-ink-soft">
           <Link
             href="/"
-            className="rounded-lg px-3 py-1.5 transition hover:bg-bg-subtle hover:text-ink"
+            className={`rounded-lg px-3 py-1.5 transition ${
+              pathname === "/"
+                ? "bg-bg-subtle font-medium text-ink"
+                : "hover:bg-bg-subtle hover:text-ink"
+            }`}
           >
             课程
           </Link>
           <Link
             href="/settings"
-            className="rounded-lg px-3 py-1.5 transition hover:bg-bg-subtle hover:text-ink"
+            className={`rounded-lg px-3 py-1.5 transition ${
+              pathname === "/settings"
+                ? "bg-bg-subtle font-medium text-ink"
+                : "hover:bg-bg-subtle hover:text-ink"
+            }`}
           >
             设置
           </Link>
+          <span className="mx-1 h-4 w-px bg-line" />
+          <LoginButton />
         </nav>
       </div>
     </header>

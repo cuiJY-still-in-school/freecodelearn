@@ -48,14 +48,6 @@ interface AuthUser {
   avatar: string;
 }
 
-interface DeviceFlowState {
-  userCode: string;
-  verificationUri: string;
-  deviceCode: string;
-  interval: number;
-  expiresIn: number;
-}
-
 export default function HomePage() {
   const router = useRouter();
   const [courses, setCourses] = useState<CourseMeta[]>([]);
@@ -75,10 +67,8 @@ export default function HomePage() {
   const [generating, setGenerating] = useState(false);
   const [chapterStates, setChapterStates] = useState<ChapterState[]>([]);
 
-  // 登录
-  const [device, setDevice] = useState<DeviceFlowState | null>(null);
-  const [deviceError, setDeviceError] = useState("");
-  const [polling, setPolling] = useState(false);
+  // 提示
+  const [notice, setNotice] = useState("");
 
   // 导入
   const [importing, setImporting] = useState(false);
@@ -92,7 +82,8 @@ export default function HomePage() {
       });
     fetch("/api/auth/me")
       .then((r) => r.json())
-      .then((data) => setUser(data.user ?? null));
+      .then((data) => setUser(data.user ?? null))
+      .catch(() => {});
   }, []);
 
   async function refreshCourses() {
@@ -206,64 +197,9 @@ export default function HomePage() {
   const allDone = chapterStates.every((s) => s.status === "done");
   const failedCount = chapterStates.filter((s) => s.status === "error").length;
 
-  // ---------- GitHub 登录(Device Flow) ----------
-
-  async function startLogin() {
-    setDeviceError("");
-    try {
-      const res = await fetch("/api/auth/device", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "发起登录失败");
-      setDevice(data);
-      setPolling(true);
-      pollDevice(data);
-    } catch (err) {
-      setDeviceError(err instanceof Error ? err.message : "发起登录失败");
-    }
-  }
-
-  async function pollDevice(state: DeviceFlowState) {
-    const timeout = Date.now() + state.expiresIn * 1000;
-    let interval = state.interval * 1000;
-    while (Date.now() < timeout) {
-      await new Promise((r) => setTimeout(r, interval));
-      try {
-        const res = await fetch("/api/auth/device/poll", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ deviceCode: state.deviceCode }),
-        });
-        const data = await res.json();
-        if (data.ok && data.user) {
-          setUser(data.user);
-          setDevice(null);
-          setPolling(false);
-          return;
-        }
-        if (data.failed) {
-          setDeviceError(data.message ?? "登录失败");
-          setDevice(null);
-          setPolling(false);
-          return;
-        }
-        if (data.slowDown) interval += 5000;
-      } catch {
-        // 网络错误,继续轮询
-      }
-    }
-    setDeviceError("授权超时,请重新发起登录");
-    setDevice(null);
-    setPolling(false);
-  }
-
-  async function logout() {
-    await fetch("/api/auth/me", { method: "DELETE" });
-    setUser(null);
-  }
-
   async function togglePublish(c: CourseMeta) {
     if (!user) {
-      setDeviceError("请先登录 GitHub 再发布课程");
+      setNotice("请先登录 GitHub 再发布课程");
       return;
     }
     setFormError("");
@@ -275,7 +211,25 @@ export default function HomePage() {
       if (!res.ok) throw new Error(data.error ?? "操作失败");
       await refreshCourses();
     } catch (err) {
-      setDeviceError(err instanceof Error ? err.message : "发布失败");
+      setNotice(err instanceof Error ? err.message : "发布失败");
+    }
+  }
+
+  async function exportCourse(c: CourseMeta) {
+    try {
+      const res = await fetch(`/api/courses/${c.id}`);
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${c.title.replace(/[\\/:*?"<>|]/g, "_")}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setNotice("导出失败");
     }
   }
 
@@ -304,41 +258,6 @@ export default function HomePage() {
     <div className="mx-auto max-w-6xl px-4 py-12">
       {/* Hero */}
       <section className="mb-12 text-center">
-        <div className="mb-6 flex justify-center">
-          {user ? (
-            <div className="flex items-center gap-3 rounded-full border border-line bg-card py-1.5 pl-1.5 pr-4 shadow-sm">
-              {user.avatar ? (
-                <img
-                  src={user.avatar}
-                  alt={user.login}
-                  className="h-8 w-8 rounded-full"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/15 text-sm font-bold text-accent">
-                  {user.login.charAt(0).toUpperCase()}
-                </span>
-              )}
-              <span className="text-sm font-medium">{user.name || user.login}</span>
-              <button
-                onClick={logout}
-                className="text-xs text-ink-soft transition hover:text-red"
-              >
-                退出
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={startLogin}
-              className="flex items-center gap-2 rounded-full border border-line bg-card px-5 py-2 text-sm font-medium shadow-sm transition hover:border-accent/50 hover:text-accent"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.09-.745.082-.73.082-.73 1.205.085 1.838 1.237 1.838 1.237 1.07 1.834 2.807 1.304 3.492.997.108-.775.418-1.305.762-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12Z" />
-              </svg>
-              使用 GitHub 登录
-            </button>
-          )}
-        </div>
         <h1 className="font-serif text-4xl font-bold tracking-tight sm:text-5xl">
           输入主题,生成一门
           <br className="sm:hidden" />{" "}
@@ -354,6 +273,7 @@ export default function HomePage() {
       {phase === "input" && (
         <form
           onSubmit={generateCourse}
+          id="generate"
           className="fade-up mx-auto max-w-2xl rounded-2xl border border-line bg-card p-8 shadow-sm"
         >
           <label className="mb-1.5 block text-sm font-medium text-ink">
@@ -524,10 +444,52 @@ export default function HomePage() {
       <section className="mt-16">
         <h2 className="mb-5 font-serif text-2xl font-bold">课程列表</h2>
         {loading ? (
-          <p className="text-ink-soft">加载中...</p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="animate-pulse rounded-2xl border border-line bg-card p-5">
+                <div className="-mx-5 -mt-5 mb-4 h-16 rounded-t-2xl bg-line/60" />
+                <div className="mb-3 h-4 w-24 rounded bg-line/60" />
+                <div className="mb-2 h-5 w-3/4 rounded bg-line/60" />
+                <div className="h-4 w-full rounded bg-line/40" />
+                <div className="mt-4 h-3 w-1/3 rounded bg-line/40" />
+              </div>
+            ))}
+          </div>
         ) : courses.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-line bg-card/50 p-14 text-center text-ink-soft">
-            还没有课程 —— 从上面输入一个主题开始
+          <div className="rounded-2xl border border-dashed border-line bg-card/50 p-10 text-center">
+            <span className="text-4xl">📚</span>
+            <p className="mt-3 font-serif text-lg font-bold">还没有课程</p>
+            <p className="mt-1 text-sm text-ink-soft">
+              在上方输入主题一键生成,或导入已有的课程 JSON
+            </p>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-xs">
+              <a
+                href="#generate"
+                className="rounded-xl bg-ink px-5 py-2.5 font-semibold text-bg transition hover:bg-accent"
+              >
+                去生成课程
+              </a>
+              <label className="cursor-pointer rounded-xl border border-line px-5 py-2.5 font-medium text-ink-soft transition hover:border-accent/50 hover:text-accent">
+                {importing ? "导入中..." : "导入课程 JSON"}
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  disabled={importing}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) importCourse(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              <Link
+                href="/settings"
+                className="rounded-xl border border-line px-5 py-2.5 font-medium text-ink-soft transition hover:border-accent/50 hover:text-accent"
+              >
+                检查 AI 设置
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -543,15 +505,30 @@ export default function HomePage() {
                 href={`/courses/${c.id}`}
                 className="group relative rounded-2xl border border-line bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md"
               >
-                <button
-                  onClick={(e) => deleteCourse(c.id, e)}
-                  className="absolute right-3 top-3 rounded-lg p-1.5 text-ink-soft opacity-0 transition hover:bg-red-soft hover:text-red group-hover:opacity-100"
-                  title="删除课程"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                  </svg>
-                </button>
+                <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition group-hover:opacity-100">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      exportCourse(c);
+                    }}
+                    className="rounded-lg p-1.5 text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
+                    title="导出课程 JSON"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => deleteCourse(c.id, e)}
+                    className="rounded-lg p-1.5 text-ink-soft transition hover:bg-red-soft hover:text-red"
+                    title="删除课程"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                    </svg>
+                  </button>
+                </div>
                 <div
                   className={`mb-4 -mx-5 -mt-5 flex h-16 items-end rounded-t-2xl bg-gradient-to-br px-5 pb-2.5 ${COVER_GRADIENTS[coverIndex(c.id)]}`}
                 >
@@ -620,57 +597,11 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* Device Flow 登录弹窗 */}
-      {device && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm"
-          onClick={() => {
-            setDevice(null);
-            setPolling(false);
-          }}
-        >
-          <div
-            className="fade-up w-full max-w-md rounded-2xl border border-line bg-card p-8 text-center shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="font-serif text-xl font-bold">GitHub 登录</h3>
-            <p className="mt-2 text-sm text-ink-soft">
-              在新窗口打开以下链接,输入设备码完成授权
-            </p>
-            <a
-              href={device.verificationUri}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 block text-lg font-semibold text-accent underline underline-offset-4"
-            >
-              {device.verificationUri}
-            </a>
-            <div className="mt-5 rounded-xl border-2 border-dashed border-accent/40 bg-accent/5 py-4">
-              <span className="font-mono text-3xl font-bold tracking-[0.3em] text-ink">
-                {device.userCode}
-              </span>
-            </div>
-            <p className="mt-4 flex items-center justify-center gap-2 text-sm text-ink-soft">
-              <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
-              等待授权中...授权后自动进入
-            </p>
-            <button
-              onClick={() => {
-                setDevice(null);
-                setPolling(false);
-              }}
-              className="mt-5 rounded-xl border border-line px-5 py-2 text-sm text-ink-soft transition hover:text-red"
-            >
-              取消
-            </button>
-          </div>
-        </div>
-      )}
-      {deviceError && (
-        <div className="fixed inset-x-0 bottom-6 z-50 mx-auto w-fit max-w-md rounded-xl border border-red-200 bg-card px-5 py-3 text-center text-sm text-red shadow-lg">
-          {deviceError}
+      {notice && (
+        <div className="fixed inset-x-0 bottom-6 z-50 mx-auto w-fit max-w-md rounded-xl border border-line bg-card px-5 py-3 text-center text-sm text-ink shadow-lg">
+          {notice}
           <button
-            onClick={() => setDeviceError("")}
+            onClick={() => setNotice("")}
             className="ml-3 text-ink-soft underline underline-offset-2 hover:text-red"
           >
             关闭

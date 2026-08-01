@@ -78,6 +78,15 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // 连接测试
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<null | {
+    ok: boolean;
+    ms?: number;
+    preview?: string;
+    error?: string;
+  }>(null);
+
   // GitHub 设置
   const [ghClientId, setGhClientId] = useState("");
   const [ghRepo, setGhRepo] = useState("freecodelearn-courses");
@@ -135,6 +144,20 @@ export default function SettingsPage() {
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
+    }
+  }
+
+  async function testConnection() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/ai/test", { method: "POST" });
+      const data = await res.json();
+      setTestResult(data);
+    } catch {
+      setTestResult({ ok: false, error: "网络错误,无法连接服务" });
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -250,13 +273,40 @@ export default function SettingsPage() {
             ✓ 已保存
           </div>
         )}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-xl bg-ink py-3 text-sm font-semibold text-bg transition hover:bg-accent disabled:opacity-40"
-        >
-          保存配置
-        </button>
+        <div className="flex gap-3">
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 rounded-xl bg-ink py-3 text-sm font-semibold text-bg transition hover:bg-accent disabled:opacity-40"
+          >
+            保存配置
+          </button>
+          <button
+            type="button"
+            onClick={testConnection}
+            disabled={testing}
+            className="rounded-xl border border-accent/40 bg-accent-soft px-5 py-3 text-sm font-semibold text-accent transition hover:bg-accent hover:text-white disabled:opacity-50"
+          >
+            {testing ? "测试中..." : "测试连接"}
+          </button>
+        </div>
+        {testResult && (
+          <div
+            className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+              testResult.ok
+                ? "border-green/20 bg-green-soft text-green"
+                : "border-red/20 bg-red-soft text-red"
+            }`}
+          >
+            {testResult.ok ? (
+              <>
+                ✓ 连接成功({testResult.ms}ms):AI 回复「{testResult.preview}」
+              </>
+            ) : (
+              <>✗ 连接失败:{testResult.error}</>
+            )}
+          </div>
+        )}
       </form>
 
       <div className="mt-6 rounded-2xl border border-line bg-card p-5 text-sm text-ink-soft">
