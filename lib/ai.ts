@@ -81,6 +81,11 @@ JSON 结构(单个对象,包含该章所有步骤):
 quiz questions 格式:
 [{"question": "题干", "options": ["选项A","选项B","选项C"], "correctIndex": 0, "explanation": "解析(简短,指出为什么对/错)"}]
 
+quiz 规则:
+- 每章末尾的 quiz 必须有 3-5 题,严禁生成空 questions
+- 同一题内选项必须互不相同;不同题目之间的选项文字也不得完全重复(如多题共用 flex-start/stretch 时,请换用其他干扰项)
+- correctIndex 必须在 options 下标范围内,正确答案唯一
+
 challenge tests 约定(JavaScript,运行在浏览器沙箱中):
 - test(name, fn) 定义测试,fn 内用 assert(condition, message)
 - 语言为 JavaScript:用户代码在测试前自动执行,直接调用用户定义的函数
@@ -98,7 +103,8 @@ challenge tests 约定(JavaScript,运行在浏览器沙箱中):
 1. 严格遵循大纲中该章步骤的 title/type/brief,顺序一致,不要增删步骤
 2. bodyMarkdown 用简体中文,讲解要具体、有示例,循序渐进
 3. 语言为 Python/Java/Go/Rust/Shell 等其他语言时:challenge 步骤省略 tests 和 html,在 bodyMarkdown 中给详细解答,并保留 solution
-4. 只输出 JSON,不要多余文字`;
+4. 语言为 JavaScript/CSS/HTML 时,每个 challenge 必须同时提供 starterCode、solution、tests 三个字段(CSS/HTML 再加 html),不得缺失
+5. 只输出 JSON,不要多余文字`;
 
 async function chat(
   userPrompt: string,
@@ -286,6 +292,34 @@ export async function generateChapter(
           await generateTests(s);
         } catch {
           // 测试生成失败则降级:无自动判题,保留查看解答
+        }
+      })
+    );
+  }
+  // 补全缺失的 starterCode / solution(保证学习页体验完整)
+  const incomplete = steps.filter(
+    (s) =>
+      s.type === "challenge" &&
+      (!s.starterCode || !s.solution)
+  );
+  if (incomplete.length > 0) {
+    await Promise.all(
+      incomplete.map(async (s) => {
+        try {
+          const content = await chat(
+            `题目:${s.title}\n语言:${s.language}\n\n题目说明:\n${
+              s.bodyMarkdown?.slice(0, 800) ?? ""
+            }\n\n现有内容:\nstarterCode:\n${
+              s.starterCode ?? "(无)"
+            }\nsolution:\n${s.solution ?? "(无)"}\n\n请补全缺失部分,输出严格 JSON(不要任何多余文字):\n{"starterCode": "初始代码,含 TODO 注释(若已有则原样返回)", "solution": "完整参考解答(若已有则原样返回)"}`,
+            true
+          );
+          const raw = parseJSON(content);
+          if (!s.starterCode && raw.starterCode)
+            s.starterCode = String(raw.starterCode);
+          if (!s.solution && raw.solution) s.solution = String(raw.solution);
+        } catch {
+          // 补全失败不影响主流程
         }
       })
     );
