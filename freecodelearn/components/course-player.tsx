@@ -200,15 +200,23 @@ export default function CoursePlayer({ course }: { course: Course }) {
             </div>
           )}
 
-          {step.type === "quiz" && step.questions && (
-            <QuizView
-              questions={step.questions}
-              onComplete={() => {
-                markDone(step.id, "correct");
-                if (next) window.setTimeout(() => goTo(next), 800);
-              }}
-            />
-          )}
+          {step.type === "quiz" &&
+            (step.questions && step.questions.length > 0 ? (
+              <QuizView
+                questions={step.questions}
+                onComplete={() => {
+                  markDone(step.id, "correct");
+                  if (next) window.setTimeout(() => goTo(next), 800);
+                }}
+              />
+            ) : (
+              <button
+                onClick={() => markDone(step.id, "done")}
+                className="rounded-xl border border-line px-4 py-2 text-sm text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
+              >
+                标记为已完成
+              </button>
+            ))}
 
           {step.type === "lesson" && (
             <button

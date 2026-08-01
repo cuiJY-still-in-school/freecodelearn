@@ -310,10 +310,11 @@ export async function assembleCourse(
     estimatedMinutes: outline.estimatedMinutes,
     createdAt: new Date().toISOString(),
     chapters: outline.chapters.map((oc, i): Chapter => {
-      const steps = chapters[i];
+      let steps = chapters[i];
       if (!steps || steps.length === 0) {
         throw new Error(`第 ${i + 1} 章内容缺失`);
       }
+      steps = sanitizeSteps(steps);
       return {
         id: `ch-${i + 1}`,
         title: oc.title,
@@ -324,4 +325,27 @@ export async function assembleCourse(
   };
   await saveCourse(course);
   return course;
+}
+
+function sanitizeSteps(steps: Step[]): Step[] {
+  return steps
+    .filter((s) => {
+      if (s.type === "quiz") {
+        const valid = (s.questions ?? []).filter(
+          (q) =>
+            q.question &&
+            Array.isArray(q.options) &&
+            q.options.length >= 2 &&
+            q.correctIndex >= 0 &&
+            q.correctIndex < q.options.length
+        );
+        s.questions = valid;
+        return valid.length > 0;
+      }
+      if (s.type === "lesson" && !s.bodyMarkdown) {
+        s.bodyMarkdown = `# ${s.title}\n\n本章内容暂缺,请直接标记为已完成继续。`;
+      }
+      return true;
+    })
+    .map((s) => s);
 }
