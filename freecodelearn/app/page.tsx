@@ -20,6 +20,21 @@ const STEP_TYPE_LABEL: Record<string, { label: string; cls: string; icon: string
   quiz: { label: "测验", cls: "bg-amber-50 text-amber-700 border-amber-200", icon: "✓" },
 };
 
+const COVER_GRADIENTS = [
+  "from-[#f6e7d9] to-[#ecd9c6]",
+  "from-[#f0e4d2] to-[#e8cfb8]",
+  "from-[#f3e0d8] to-[#e5c9b4]",
+  "from-[#efe3cf] to-[#dcc9a8]",
+  "from-[#f0e2d3] to-[#d8c0ad]",
+  "from-[#f2e6d6] to-[#e2d0ba]",
+];
+
+function coverIndex(id: string): number {
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % COVER_GRADIENTS.length;
+}
+
 interface ChapterState {
   status: "pending" | "working" | "done" | "error";
   steps?: Step[];
@@ -418,6 +433,13 @@ export default function HomePage() {
                     <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
                   </svg>
                 </button>
+                <div
+                  className={`mb-4 -mx-5 -mt-5 flex h-16 items-end rounded-t-2xl bg-gradient-to-br px-5 pb-2.5 ${COVER_GRADIENTS[coverIndex(c.id)]}`}
+                >
+                  <span className="font-serif text-3xl font-bold text-ink/25">
+                    {c.title.trim().charAt(0)}
+                  </span>
+                </div>
                 <div className="mb-3 flex items-center gap-2">
                   <span className="rounded-full border border-line bg-bg-subtle px-2.5 py-0.5 text-xs text-ink-soft">
                     {LEVEL_LABEL[c.level]}
