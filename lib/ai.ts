@@ -281,13 +281,32 @@ export async function guardTopic(
 
 /* ---------- 联网检索资料(准备阶段) ---------- */
 
-const RESEARCH_PLAN_TASK = `你是资料检索策划。请根据下面的课程主题,规划需要联网查询的知识点,输出严格 JSON(不要任何多余文字):
-{"queries": ["查询词1", "查询词2", ...]}
+/** 当前日期(含星期),用于让 AI 感知时效性 */
+function todayStr(): string {
+  const d = new Date();
+  const w = ["日", "一", "二", "三", "四", "五", "六"][d.getDay()];
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}(${w})`;
+}
+
+/** 系统参数:日期、时区、语言、用途,注入所有生成阶段提示词 */
+const systemContext = () =>
+  `【系统参数】
+- 当前日期:${todayStr()}(请据此判断资料与信息的时效性)
+- 系统时区:${Intl.DateTimeFormat().resolvedOptions().timeZone}
+- 语言:简体中文
+- 用途:为学习者在「FreeCodeLearn」生成 freeCodeCamp 风格的编程课程`;
+
+const RESEARCH_PLAN_TASK = `你是资料检索策划。请根据下面的课程主题,规划需要联网查询的知识点与目标网站,输出严格 JSON(不要任何多余文字):
+{"queries": ["查询词1", "查询词2", ...], "sites": ["权威域名1", "权威域名2", ...]}
 
 规则:
 - 3-5 个查询词,覆盖:① 核心概念 ② 常用工具/库 ③ 典型用法或最佳实践 ④ 进阶内容
 - 查询词要具体、可检索(如「Python collections Counter 用法」「Git 工作区 暂存区 区别」),不要空泛(如「python 教程」)
 - 中文为主,术语可用英文
+- sites:2-4 个你认为对该主题最权威、内容最新、最值得采信的网站域名(如 docs.python.org、developer.mozilla.org、stackoverflow.com、learn.microsoft.com、www.w3schools.com 等,按主题选择,不要带 https:// 前缀)
+- 检索时将优先从这些网站获取资料,查不到才回退通用搜索
 
 课程主题:`;
 
@@ -302,7 +321,8 @@ function decodeEntities(s: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;|&#x27;/g, "'")
-    .replace(/&nbsp;/g, " ");
+    .replace(/&ensp;|&#0183;|&nbsp;/g, " ")
+    .replace(/&#\d+;/g, "");
 }
 
 async function bingSearch(query: string, count = 3): Promise<string> {
@@ -336,14 +356,16 @@ async function bingSearch(query: string, count = 3): Promise<string> {
   }
 }
 
-/** 在课程准备阶段联网检索资料:AI 制定查询计划 → Bing 抓取结果 → 汇总摘要(失败返回空,不阻塞) */
+/** 在课程准备阶段联网检索资料:AI 制定查询计划与目标网站 → 优先站内检索、回退通用搜索 → 汇总摘要(失败返回空,不阻塞) */
 export async function researchTopic(
   topic: string,
   goal?: string
 ): Promise<string> {
   try {
     const content = await chat(
-      `${RESEARCH_PLAN_TASK}\n${topic}${goal ? `\n学习目标:${goal}` : ""}`,
+      `${systemContext()}\n\n${RESEARCH_PLAN_TASK}\n${topic}${
+        goal ? `\n学习目标:${goal}` : ""
+      }`,
       true
     );
     const raw = parseJSON(content);
@@ -351,10 +373,25 @@ export async function researchTopic(
       .map((q) => String(q).trim())
       .filter(Boolean)
       .slice(0, 5);
+    // AI 自行选择的目标网站(校验为合法域名)
+    const sites = (Array.isArray(raw.sites) ? raw.sites : [])
+      .map((s) => String(s).trim().replace(/^https?:\/\//, ""))
+      .filter((s) => /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(s))
+      .slice(0, 4);
     if (queries.length === 0) return "";
     const sections: string[] = [];
     for (const q of queries) {
-      const results = await bingSearch(q);
+      let results = "";
+      // ① 优先从 AI 指定的网站站内检索(可多站依次尝试,取第一个有结果的)
+      for (const site of sites) {
+        const r = await bingSearch(`site:${site} ${q}`);
+        if (r) {
+          results = r;
+          break;
+        }
+      }
+      // ② 站内无结果 → 回退通用搜索
+      if (!results) results = await bingSearch(q);
       if (results) sections.push(`【${q}】\n${results}`);
     }
     return sections.join("\n\n").slice(0, 30000);
@@ -368,7 +405,7 @@ export async function researchTopic(
 export async function generateOutline(input: GenerateInput): Promise<CourseOutline> {
   const refDoc = (input.referenceDoc ?? "").slice(0, 30000);
   const researchNotes = (input.researchNotes ?? "").slice(0, 30000);
-  const userPrompt = `请设计课程大纲。\n主题:${input.topic}\n难度:${input.level}${
+  const userPrompt = `${systemContext()}\n\n请设计课程大纲。\n主题:${input.topic}\n难度:${input.level}${
     input.goal ? `\n学习目标:${input.goal}` : ""
   }${input.description ? `\n补充说明:${input.description}` : ""}${
     refDoc
@@ -380,7 +417,7 @@ export async function generateOutline(input: GenerateInput): Promise<CourseOutli
       : ""
   }${
     researchNotes
-      ? `\n\n联网检索资料(覆盖其中的核心知识点、常用工具与最佳实践):\n"""\n${researchNotes}\n"""`
+      ? `\n\n联网检索资料(覆盖其中的核心知识点、常用工具与最佳实践;资料检索于 ${todayStr()},注意时效性):\n"""\n${researchNotes}\n"""`
       : ""
   }\n\n${OUTLINE_TASK}`;
 
@@ -492,7 +529,7 @@ export async function generateChapter(
   const chapter = outline.chapters[chapterIndex];
   if (!chapter) throw new Error("章节不存在");
 
-  const userPrompt = `课程信息:\n标题:${outline.title}\n语言:${outline.language}\n难度:${outline.level}\n\n本章标题:${chapter.title}\n本章简介:${chapter.description}\n\n本章步骤(必须全部覆盖,顺序一致):\n${chapter.steps
+  const userPrompt = `${systemContext()}\n\n课程信息:\n标题:${outline.title}\n语言:${outline.language}\n难度:${outline.level}\n\n本章标题:${chapter.title}\n本章简介:${chapter.description}\n\n本章步骤(必须全部覆盖,顺序一致):\n${chapter.steps
     .map((s, i) => `${i + 1}. [${s.type}] ${s.title}\n   brief: ${s.brief}`)
     .join("\n")}${
     outline.referenceDoc
@@ -500,7 +537,7 @@ export async function generateChapter(
       : ""
   }${
     outline.researchNotes
-      ? `\n\n联网检索资料(讲解可取材其中,术语与做法保持一致):\n"""\n${outline.researchNotes.slice(
+      ? `\n\n联网检索资料(讲解可取材其中,术语与做法保持一致;检索于 ${todayStr()}):\n"""\n${outline.researchNotes.slice(
           0,
           30000
         )}\n"""`
@@ -623,7 +660,7 @@ export async function appendChapter(
   chapterTitle: string
 ): Promise<Step[]> {
   const existing = course.description ? `\n课程简介:${course.description}` : "";
-  const userPrompt = `课程标题:${course.title}${existing}
+  const userPrompt = `${systemContext()}\n\n课程标题:${course.title}${existing}
 课程语言:${course.language}
 课程难度:${course.level}
 
