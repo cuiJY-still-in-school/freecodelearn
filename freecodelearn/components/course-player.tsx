@@ -373,6 +373,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
           {step.type === "challenge" && (
             <div>
               <ChallengeRunner
+                key={step.id}
                 starterCode={step.starterCode ?? ""}
                 tests={step.tests}
                 solution={step.solution}
@@ -400,6 +401,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
           {step.type === "quiz" &&
             (step.questions && step.questions.length > 0 ? (
               <QuizView
+                key={step.id}
                 questions={step.questions}
                 onComplete={() => handlePassed("correct")}
               />
