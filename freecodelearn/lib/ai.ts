@@ -219,6 +219,34 @@ export async function chatTest(): Promise<string> {
   return content;
 }
 
+/* ---------- 主题相关度把关 ---------- */
+
+const GUARD_TASK = `你是产品审核员。判断用户输入的主题是否适合作为「编程/技术学习课程」的主题,输出严格 JSON(不要任何多余文字):
+{"relevant": true 或 false, "reason": "一句话说明原因(中文)"}
+
+判断标准:
+- 相关(返回 true):编程语言、框架、前端/后端开发、算法、数据结构、数据库、网络、操作系统、命令行/Shell、Git、信息安全、AI 技术、网页设计(HTML/CSS)、软件工具使用等一切计算机技术学习内容
+- 无关(返回 false):烹饪美食、旅游攻略、健身运动、音乐绘画、商业管理、心理情感、生活常识等与计算机编程无关的内容
+- 边缘情况自行判断:不确定时偏向相关,reason 如实说明
+
+用户主题:`;
+
+export async function guardTopic(
+  topic: string
+): Promise<{ relevant: boolean; reason: string }> {
+  try {
+    const content = await chat(`${GUARD_TASK}${topic}`, true);
+    const raw = parseJSON(content);
+    return {
+      relevant: raw.relevant !== false,
+      reason: raw.reason ? String(raw.reason) : "",
+    };
+  } catch {
+    // 把关失败不阻塞生成流程
+    return { relevant: true, reason: "" };
+  }
+}
+
 /* ---------- 大纲生成 ---------- */
 
 export async function generateOutline(input: GenerateInput): Promise<CourseOutline> {

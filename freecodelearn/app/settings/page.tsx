@@ -76,6 +76,13 @@ export default function SettingsPage() {
         选择服务商预设或手动填写。解析方法决定请求协议:OpenAI 兼容或 Anthropic 兼容。
       </p>
 
+      {typeof window !== "undefined" && window.location.search.includes("first=1") && (
+        <div className="pop mb-6 rounded-2xl border border-accent/25 bg-accent/5 px-5 py-4 text-sm leading-relaxed text-ink">
+          👋 欢迎使用 FreeCodeLearn!首次使用需要先配置 AI 服务(任意 OpenAI 兼容或
+          Anthropic 接口均可)。填写下方信息并点「测试连接」验证成功后,就可以回到首页生成课程了。
+        </div>
+      )}
+
       {apiKey && (
         <div className="mb-6 flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-full border border-line bg-card px-3 py-1 text-ink-soft">
