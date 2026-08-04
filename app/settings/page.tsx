@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 export default function SettingsPage() {
   const [provider, setProvider] = useState("");
@@ -180,6 +181,24 @@ export default function SettingsPage() {
             ✓ 已保存
           </div>
         )}
+        {saved &&
+          typeof window !== "undefined" &&
+          window.location.search.includes("first=1") && (
+            <div className="pop mb-4 rounded-2xl border border-green/30 bg-green-soft px-5 py-4">
+              <p className="text-sm font-semibold text-green">
+                ✅ 配置成功,可以开始学习之旅了
+              </p>
+              <p className="mt-1 text-xs text-green/80">
+                输入一个想学的主题,几分钟后就能拿到一门可学的课程
+              </p>
+              <Link
+                href="/?configured=1"
+                className="mt-3 inline-block rounded-xl bg-green px-5 py-2 text-xs font-semibold text-white transition hover:bg-green-700"
+              >
+                去生成第一门课 →
+              </Link>
+            </div>
+          )}
         <div className="flex gap-3">
           <button
             type="submit"
