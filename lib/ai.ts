@@ -4,8 +4,13 @@ import { getSettings, newCourseId, saveCourse } from "./store";
 export interface GenerateInput {
   topic: string;
   level: Course["level"];
+  /** 兼容字段:已不再强制,由 AI 根据目标自定章节数 */
   chapters?: number;
   description?: string;
+  /** 学习目标:想达到什么水平,AI 据此决定章节数 */
+  goal?: string;
+  /** 联网检索到的资料摘要(由 researchTopic 生成) */
+  researchNotes?: string;
   /** 用户上传的参考文档全文(用于定制课程内容) */
   referenceDoc?: string;
   /** 参考已有课程的结构摘要(用于风格/结构定制) */
@@ -34,6 +39,8 @@ export interface CourseOutline {
   chapters: OutlineChapter[];
   /** 参考文档全文(透传给章节生成) */
   referenceDoc?: string;
+  /** 联网检索到的资料摘要(透传给章节生成) */
+  researchNotes?: string;
 }
 
 const SYSTEM_PROMPT = `你是课程设计专家,擅长设计 freeCodeCamp 风格的循序渐进编程课程。`;
@@ -67,11 +74,13 @@ JSON 结构:
 5. 挑战要小步渐进:像 freeCodeCamp 的 step 系列,每个挑战只引入一个新概念、只改一处小地方(如「给 h1 加一个 class」「给数组排序并赋值」),绝不要一个大挑战塞三个知识点
 6. challenge 步骤的 brief 必须写清楚:改哪里、改成什么(精确到元素/函数/值),让内容作者无需再猜
 7. 每章 quiz 考察「理解」而非「记忆」:用新的小例子检验概念是否真懂(如把本章讲的语法换个场景提问)
-8. 章节数按用户指定的数字(1-12),内容适度即可,不要注水
+8. 章节数由你根据「学习目标」与主题复杂度自定(3-10 章):目标宏大、内容面广则 5-10 章;入门小目标则 3-4 章;不注水,每章都要有明确的构建成果
+9. 用户提供「学习目标」时,课程围绕目标设计:学完能做什么、覆盖哪些关键技能;目标决定章节数与步骤
 
 参考资料(必须遵守):
 - 如果提供了「参考文档」:课程内容必须取材自该文档(文档的技术栈、术语、示例、工作流),大纲先覆盖文档核心内容再扩展
-- 如果提供了「参考课程」:新课程应模仿其项目式结构、步骤粒度与风格,但主题按用户输入,不得照搬参考课程内容`;
+- 如果提供了「参考课程」:新课程应模仿其项目式结构、步骤粒度与风格,但主题按用户输入,不得照搬参考课程内容
+- 如果提供了「联网检索资料」:大纲必须覆盖资料中的核心知识点、常用工具与最佳实践,确保课程内容具体、不过时、不空洞`;
 
 const CHAPTER_TASK = `你是课程内容作者。根据大纲中的一章,撰写完整的课程内容,输出严格的 JSON(不要任何多余文字,不要 markdown 代码块)。
 
@@ -270,21 +279,108 @@ export async function guardTopic(
   }
 }
 
+/* ---------- 联网检索资料(准备阶段) ---------- */
+
+const RESEARCH_PLAN_TASK = `你是资料检索策划。请根据下面的课程主题,规划需要联网查询的知识点,输出严格 JSON(不要任何多余文字):
+{"queries": ["查询词1", "查询词2", ...]}
+
+规则:
+- 3-5 个查询词,覆盖:① 核心概念 ② 常用工具/库 ③ 典型用法或最佳实践 ④ 进阶内容
+- 查询词要具体、可检索(如「Python collections Counter 用法」「Git 工作区 暂存区 区别」),不要空泛(如「python 教程」)
+- 中文为主,术语可用英文
+
+课程主题:`;
+
+function stripHtml(s: string): string {
+  return s.replace(/<[^>]+>/g, "");
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
+async function bingSearch(query: string, count = 3): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${count}`,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+          "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        },
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    if (!res.ok) return "";
+    const html = await res.text();
+    const items: string[] = [];
+    for (const m of html.matchAll(/<li class="b_algo"[\s\S]*?<\/li>/g)) {
+      const block = m[0];
+      const titleM = block.match(/<h2[^>]*>\s*<a[^>]*>([\s\S]*?)<\/a>/);
+      const snipM = block.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+      const title = titleM ? decodeEntities(stripHtml(titleM[1])).trim() : "";
+      const snip = snipM ? decodeEntities(stripHtml(snipM[1])).trim() : "";
+      if (title) items.push(snip ? `${title}: ${snip}` : title);
+      if (items.length >= count) break;
+    }
+    return items.join("\n");
+  } catch {
+    return "";
+  }
+}
+
+/** 在课程准备阶段联网检索资料:AI 制定查询计划 → Bing 抓取结果 → 汇总摘要(失败返回空,不阻塞) */
+export async function researchTopic(
+  topic: string,
+  goal?: string
+): Promise<string> {
+  try {
+    const content = await chat(
+      `${RESEARCH_PLAN_TASK}\n${topic}${goal ? `\n学习目标:${goal}` : ""}`,
+      true
+    );
+    const raw = parseJSON(content);
+    const queries = (Array.isArray(raw.queries) ? raw.queries : [])
+      .map((q) => String(q).trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    if (queries.length === 0) return "";
+    const sections: string[] = [];
+    for (const q of queries) {
+      const results = await bingSearch(q);
+      if (results) sections.push(`【${q}】\n${results}`);
+    }
+    return sections.join("\n\n").slice(0, 30000);
+  } catch {
+    return "";
+  }
+}
+
 /* ---------- 大纲生成 ---------- */
 
 export async function generateOutline(input: GenerateInput): Promise<CourseOutline> {
   const refDoc = (input.referenceDoc ?? "").slice(0, 30000);
+  const researchNotes = (input.researchNotes ?? "").slice(0, 30000);
   const userPrompt = `请设计课程大纲。\n主题:${input.topic}\n难度:${input.level}${
-    input.chapters ? `\n章节数:${input.chapters}` : ""
-  }${
-    input.description ? `\n补充说明:${input.description}` : ""
-  }${
+    input.goal ? `\n学习目标:${input.goal}` : ""
+  }${input.description ? `\n补充说明:${input.description}` : ""}${
     refDoc
       ? `\n\n参考文档(课程内容必须取材于此,术语/示例/工作流保持一致):\n"""\n${refDoc}\n"""`
       : ""
   }${
     input.referenceCourse
       ? `\n\n参考课程(模仿其项目式结构与步骤粒度,但内容按本主题原创):\n"""\n${input.referenceCourse}\n"""`
+      : ""
+  }${
+    researchNotes
+      ? `\n\n联网检索资料(覆盖其中的核心知识点、常用工具与最佳实践):\n"""\n${researchNotes}\n"""`
       : ""
   }\n\n${OUTLINE_TASK}`;
 
@@ -328,6 +424,7 @@ export async function generateOutline(input: GenerateInput): Promise<CourseOutli
     estimatedMinutes: Number(raw.estimatedMinutes ?? 30) || 30,
     chapters,
     referenceDoc: refDoc || undefined,
+    researchNotes: researchNotes || undefined,
   };
 }
 
@@ -400,6 +497,13 @@ export async function generateChapter(
     .join("\n")}${
     outline.referenceDoc
       ? `\n\n参考文档(讲解与示例取材于此,术语/示例保持一致):\n"""\n${outline.referenceDoc}\n"""`
+      : ""
+  }${
+    outline.researchNotes
+      ? `\n\n联网检索资料(讲解可取材其中,术语与做法保持一致):\n"""\n${outline.researchNotes.slice(
+          0,
+          30000
+        )}\n"""`
       : ""
   }\n\n请生成本章全部步骤内容。${CHAPTER_TASK}`;
 
