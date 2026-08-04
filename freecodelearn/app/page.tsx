@@ -49,7 +49,7 @@ export default function HomePage() {
   // 表单
   const [topic, setTopic] = useState("");
   const [level, setLevel] = useState<"beginner" | "intermediate" | "advanced">("beginner");
-  const [chapters, setChapters] = useState(4);
+  const [goal, setGoal] = useState("");
   const [extra, setExtra] = useState("");
   const [formError, setFormError] = useState("");
 
@@ -60,10 +60,29 @@ export default function HomePage() {
   const [refCourseSummary, setRefCourseSummary] = useState("");
 
   // 流程
-  const [phase, setPhase] = useState<"input" | "preview" | "generating" | "done">("input");
+  const [phase, setPhase] = useState<"input" | "researching" | "preview" | "generating" | "done">("input");
   const [outline, setOutline] = useState<CourseOutline | null>(null);
   const [generating, setGenerating] = useState(false);
   const [chapterStates, setChapterStates] = useState<ChapterState[]>([]);
+  const [researchNote, setResearchNote] = useState("");
+
+  // 联网检索阶段的轮转文案
+  const RESEARCH_MSGS = [
+    "正在分析主题与知识点...",
+    "正在制定资料查询计划...",
+    "正在联网查找资料...",
+    "正在整理资料要点...",
+  ];
+  const [researchMsgIdx, setResearchMsgIdx] = useState(0);
+  useEffect(() => {
+    if (phase !== "researching") return;
+    const t = window.setInterval(
+      () => setResearchMsgIdx((i) => (i + 1) % RESEARCH_MSGS.length),
+      6000
+    );
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   // 提示
   const [notice, setNotice] = useState("");
@@ -143,14 +162,36 @@ export default function HomePage() {
   }
 
   async function runGeneration() {
+    // ① 联网检索资料(AI 制定查询计划 + Bing 抓取,失败则跳过,不阻塞)
+    setPhase("researching");
+    setResearchNote("");
+    let notes = "";
+    try {
+      const rr = await fetch("/api/ai/research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          goal: goal.trim() || undefined,
+        }),
+      });
+      const rd = await rr.json().catch(() => null);
+      notes = rd?.notes ?? "";
+    } catch {
+      // 检索失败:继续走纯 AI 生成
+    }
+    setResearchNote(notes);
+
+    // ② 生成大纲
     const res = await fetch("/api/ai/outline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         topic,
         level,
-        chapters,
+        goal: goal.trim() || undefined,
         description: extra || undefined,
+        researchNotes: notes || undefined,
         referenceDoc: refDoc?.text,
         referenceCourse: refCourseSummary || undefined,
       }),
@@ -289,6 +330,7 @@ export default function HomePage() {
     e.preventDefault();
     e.stopPropagation();
     if (!confirm("确定删除这门课程?进度也会一并清除。")) return;
+    localStorage.removeItem(`fcl-progress-${id}`);
     await fetch("/api/courses", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -299,6 +341,8 @@ export default function HomePage() {
 
   const allDone = chapterStates.every((s) => s.status === "done");
   const failedCount = chapterStates.filter((s) => s.status === "error").length;
+  const doneCount = chapterStates.filter((s) => s.status === "done").length;
+  const totalCount = chapterStates.length;
 
   // ---------- .fcl 导出 / 导入 ----------
 
@@ -439,37 +483,25 @@ export default function HomePage() {
             className="mb-5 w-full rounded-xl border border-line bg-bg px-4 py-3 text-[15px] outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
             required
           />
+          <input
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            placeholder="学习目标(可选):希望学完后达到什么水平?如「能独立写出爬虫」—— AI 会据此决定课程章节数"
+            className="mb-5 w-full rounded-xl border border-line bg-bg px-4 py-3 text-sm outline-none transition focus:border-accent"
+          />
           <div className="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
-            {[
-              { label: "难度", value: level, set: (v: string) => setLevel(v as typeof level), options: [["beginner", "入门"], ["intermediate", "进阶"], ["advanced", "高级"]] },
-              { label: "章节数", value: chapters, set: (v: string) => setChapters(Math.max(1, Math.min(12, Number(v) || 4))), options: [["4", "4 章"], ["6", "6 章"], ["8", "8 章"]] },
-            ].map((f) => (
-              <div key={f.label} className="max-w-[12rem]">
-                <label className="mb-1 block text-sm text-ink-soft">{f.label}</label>
-                {f.label === "章节数" ? (
-                  <input
-                    type="number"
-                    min={1}
-                    max={12}
-                    value={f.value}
-                    onChange={(e) => f.set(e.target.value)}
-                    className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm outline-none transition focus:border-accent"
-                  />
-                ) : (
-                  <select
-                    value={f.value}
-                    onChange={(e) => f.set(e.target.value)}
-                    className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm outline-none transition focus:border-accent"
-                  >
-                    {(f.options as [string, string][]).map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            ))}
+            <div className="max-w-[12rem]">
+              <label className="mb-1 block text-sm text-ink-soft">难度</label>
+              <select
+                value={level}
+                onChange={(e) => setLevel(e.target.value as typeof level)}
+                className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm outline-none transition focus:border-accent"
+              >
+                <option value="beginner">入门</option>
+                <option value="intermediate">进阶</option>
+                <option value="advanced">高级</option>
+              </select>
+            </div>
           </div>
           <input
             value={extra}
@@ -557,7 +589,7 @@ export default function HomePage() {
             )}
           </button>
           <p className="mt-3 text-center text-xs text-ink-soft">
-            输入主题即可,编程语言由 AI 自动判断 —— 生成完成后直接进入学习
+            输入主题即可,编程语言由 AI 自动判断 —— 生成前 AI 会先联网检索资料,再定制课程
           </p>
           <label className="mt-4 block cursor-pointer text-center text-xs text-ink-soft transition hover:text-accent">
             <span className="inline-flex items-center gap-1">
@@ -578,6 +610,50 @@ export default function HomePage() {
         </form>
       )}
 
+      {/* 联网检索阶段 */}
+      {phase === "researching" && (
+        <div className="fade-up mx-auto max-w-2xl rounded-2xl border border-line bg-card p-10 shadow-sm">
+          <div className="flex items-start gap-4">
+            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="font-serif text-lg font-bold text-ink">
+                正在准备《{topic}》的资料
+              </h3>
+              <p className="mt-1 text-sm text-ink-soft">{RESEARCH_MSGS[researchMsgIdx]}</p>
+              <p className="mt-2 text-xs text-ink-soft/70">
+                AI 会先联网查找相关知识点与最佳实践,再据此设计课程,内容更准确、不过时
+              </p>
+            </div>
+          </div>
+          <div className="mt-6 space-y-2">
+            {RESEARCH_MSGS.map((m, i) => (
+              <div key={m} className="flex items-center gap-2 text-xs">
+                <span
+                  className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${
+                    i < researchMsgIdx
+                      ? "bg-green-soft text-green"
+                      : i === researchMsgIdx
+                        ? "bg-accent-soft text-accent"
+                        : "bg-bg-subtle text-ink-soft/50"
+                  }`}
+                >
+                  {i < researchMsgIdx ? "✓" : i === researchMsgIdx ? "●" : "○"}
+                </span>
+                <span
+                  className={
+                    i === researchMsgIdx ? "text-ink" : i < researchMsgIdx ? "text-ink-soft" : "text-ink-soft/50"
+                  }
+                >
+                  {m}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 大纲确认 */}
       {phase === "preview" && outline && (
         <div className="fade-up mx-auto max-w-3xl">
@@ -594,6 +670,19 @@ export default function HomePage() {
                 {outline.language} · {outline.chapters.length} 章 · 约{" "}
                 {outline.estimatedMinutes} 分钟
               </span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {researchNote && (
+                <span className="rounded-full border border-accent/30 bg-accent-soft px-2.5 py-0.5 text-[11px] text-accent">
+                  🔍 已联网检索资料并应用于课程设计
+                </span>
+              )}
+              {goal.trim() && (
+                <span className="rounded-full border border-line bg-bg-subtle px-2.5 py-0.5 text-[11px] text-ink-soft">
+                  🎯 目标:{goal.trim().slice(0, 40)}
+                  {goal.trim().length > 40 ? "…" : ""}
+                </span>
+              )}
             </div>
 
             <div className="mt-6 space-y-4">
@@ -675,6 +764,27 @@ export default function HomePage() {
                 ← 放弃,返回修改
               </button>
             )}
+          </div>
+
+          {/* 总进度 */}
+          <div className="mb-6 rounded-2xl border border-line bg-card p-5 shadow-sm">
+            <div className="mb-2 flex items-center justify-between text-xs">
+              <span className="font-medium text-ink">课程完成进度</span>
+              <span className="text-ink-soft">
+                {doneCount}/{totalCount} 章
+                {failedCount > 0 && (
+                  <span className="ml-2 text-red">{failedCount} 章失败</span>
+                )}
+              </span>
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-full bg-line">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-500"
+                style={{
+                  width: `${totalCount ? (doneCount / totalCount) * 100 : 0}%`,
+                }}
+              />
+            </div>
           </div>
 
           <div className="space-y-3">

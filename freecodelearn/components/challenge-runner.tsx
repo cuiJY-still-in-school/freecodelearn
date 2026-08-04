@@ -138,6 +138,7 @@ export default function ChallengeRunner({
 
   function run() {
     if (!tests) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
     setResult(null);
     setTimeoutMsg(false);
     setRunning(true);
@@ -380,7 +381,12 @@ ${HARNESS_SUFFIX}
               <div className="absolute right-2 top-2 flex gap-1.5">
                 <button
                   onClick={() => {
-                    setCode(solution);
+                    // 种子模式下答案只含编辑区部分,需保留种子骨架
+                    setCode(
+                      hasSeed
+                        ? `${seedBefore ?? ""}\n--fcc-editable-region--\n${solution}\n--fcc-editable-region--\n${seedAfter ?? ""}`
+                        : solution
+                    );
                     setResult(null);
                     setTimeoutMsg(false);
                     setShowSolution(false);

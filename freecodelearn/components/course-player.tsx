@@ -116,7 +116,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
   function clearAllProgress() {
     if (!window.confirm("确定清除这门课程的全部学习进度吗?")) return;
     setProgress({});
-    localStorage.removeItem(course.id);
+    localStorage.removeItem(`fcl-progress-${course.id}`);
     const first = flat.length ? flat[0].step.id : "";
     if (first) goTo(first);
   }
@@ -199,7 +199,9 @@ export default function CoursePlayer({ course }: { course: Course }) {
 
   // 通过后:标记完成 → 显示成功横幅 → 2 秒后自动进入下一步(可手动立即进入)
   function handlePassed(status: "passed" | "correct") {
-    markDone(step?.id ?? currentId, status);
+    const chapterDone = markDone(step?.id ?? currentId, status);
+    // 章末步完成:markDone 已接管(章节横幅 + 2500ms 后跳转),不再抢定时器
+    if (chapterDone) return;
     if (!next) return;
     setPassedFlash(true);
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
