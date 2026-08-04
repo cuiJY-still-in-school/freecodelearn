@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CourseMeta } from "@/lib/store";
@@ -68,6 +68,12 @@ export default function HomePage() {
   // AI 配置状态
   const [aiConfigured, setAiConfigured] = useState(true);
 
+  // 配置成功回跳提示(/?configured=1)
+  const [configuredFlash, setConfiguredFlash] = useState(
+    () => typeof window !== "undefined" && window.location.search.includes("configured=1")
+  );
+  const topicRef = useRef<HTMLInputElement>(null);
+
   // 无关主题确认
   const [guardPending, setGuardPending] = useState<{
     topic: string;
@@ -92,6 +98,12 @@ export default function HomePage() {
         }
       })
       .catch(() => {});
+    // 配置成功回跳:显示成功横幅、聚焦输入框、清理 URL
+    if (window.location.search.includes("configured=1")) {
+      setConfiguredFlash(true);
+      window.history.replaceState({}, "", "/");
+      window.setTimeout(() => topicRef.current?.focus(), 600);
+    }
   }, [router]);
 
   async function refreshCourses() {
@@ -310,6 +322,24 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* 配置成功横幅 */}
+      {configuredFlash && (
+        <div className="fade-up mx-auto mb-8 flex max-w-2xl items-center justify-between gap-4 rounded-2xl border border-green/30 bg-green-soft px-5 py-4">
+          <div className="text-sm text-green">
+            <p className="font-semibold">AI 服务配置成功</p>
+            <p className="mt-0.5 text-xs text-green/80">
+              输入主题,生成你的第一门课程吧
+            </p>
+          </div>
+          <button
+            onClick={() => setConfiguredFlash(false)}
+            className="shrink-0 rounded-xl bg-green px-4 py-2 text-xs font-semibold text-white transition hover:bg-green-700"
+          >
+            开始
+          </button>
+        </div>
+      )}
+
       {/* Hero */}
       <section className="mb-12 text-center">
         <h1 className="font-serif text-4xl font-bold tracking-tight sm:text-5xl">
@@ -334,6 +364,7 @@ export default function HomePage() {
             想学什么?
           </label>
           <input
+            ref={topicRef}
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             placeholder="例如:JavaScript 数组方法、Python 爬虫入门、Git 与 GitHub"
