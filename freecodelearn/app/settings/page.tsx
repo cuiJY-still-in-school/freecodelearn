@@ -108,7 +108,7 @@ export default function SettingsPage() {
         className="rounded-2xl border border-line bg-card p-6 shadow-sm"
       >
         <label className="mb-1.5 block text-sm font-medium text-ink">
-          Provider(服务商)
+          provider
         </label>
         <input
           value={provider}
@@ -117,7 +117,7 @@ export default function SettingsPage() {
           className="mb-4 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
         <label className="mb-1.5 block text-sm font-medium text-ink">
-          解析方法(协议格式)
+          parseMethod(协议格式)
         </label>
         <div className="mb-4 grid grid-cols-2 gap-2">
           {[
@@ -160,7 +160,7 @@ export default function SettingsPage() {
           required
         />
         <label className="mb-1.5 block text-sm font-medium text-ink">
-          模型
+          model
         </label>
         <input
           value={model}
