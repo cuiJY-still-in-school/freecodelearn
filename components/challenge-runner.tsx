@@ -153,7 +153,7 @@ export default function ChallengeRunner({
       // CSS 挑战:编辑区内容作为 <style> 注入,html 字段为测试页面 DOM
       body = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
-${sanitizeEditableMarks(code, true)}
+${escapeScript(sanitizeEditableMarks(code, true))}
 </style>
 </head><body>
 ${html ?? ""}
@@ -176,7 +176,7 @@ ${HARNESS_SUFFIX}
 <style>body { font-family: system-ui, sans-serif; }</style>
 </head><body>
 ${html ?? ""}
-${sanitizeEditableMarks(code, false)}
+${escapeScript(sanitizeEditableMarks(code, false))}
 <script>
 const __fcl_code = ${JSON.stringify(editable)};
 const code = __fcl_code;
@@ -211,7 +211,7 @@ const __fcl_code = ${JSON.stringify(editable)};
 const code = __fcl_code;
 ${HARNESS_PREFIX}
 try {
-${sanitizeEditableMarks(code, true)}
+${escapeScript(sanitizeEditableMarks(code, true))}
 ${escapeScript(tests)}
 } catch (e) {
   __fcl.fatal = "代码执行出错: " + String((e && e.message) || e);

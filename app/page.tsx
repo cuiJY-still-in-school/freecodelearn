@@ -258,11 +258,13 @@ export default function HomePage() {
   }
 
   async function generateAll(outlineData: CourseOutline) {
+    setFormError("");
+    assemblingRef.current = false;
     setPhase("generating");
     const states = outlineData.chapters.map(() => ({ status: "working" as const }));
     setChapterStates(states);
 
-    const results = await Promise.all(
+    await Promise.all(
       outlineData.chapters.map(async (_, i) => {
         try {
           const res = await fetch("/api/ai/chapter", {
@@ -275,23 +277,33 @@ export default function HomePage() {
           setChapterStates((prev) =>
             prev.map((s, si) => (si === i ? { status: "done", steps: data.steps } : s))
           );
-          return data.steps as Step[];
         } catch (err) {
           const msg = err instanceof Error ? err.message : "生成失败";
           setChapterStates((prev) =>
             prev.map((s, si) => (si === i ? { status: "error", error: msg } : s))
           );
-          return null;
         }
       })
     );
+    // 保存与跳转由下面的 useEffect 统一处理(含重试后全部成功的场景)
+  }
 
-    if (results.every((r) => r !== null)) {
+  // 全部章节就绪后自动组装保存(首轮生成与章节重试共用此路径)
+  const assemblingRef = useRef(false);
+  const allDone = chapterStates.every((s) => s.status === "done");
+  useEffect(() => {
+    if (phase !== "generating" || !outline || !allDone || chapterStates.length === 0) return;
+    if (assemblingRef.current) return;
+    assemblingRef.current = true;
+    (async () => {
       try {
         const res = await fetch("/api/ai/assemble", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ outline: outlineData, chapters: results }),
+          body: JSON.stringify({
+            outline,
+            chapters: chapterStates.map((s) => s.steps),
+          }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "保存失败");
@@ -299,10 +311,14 @@ export default function HomePage() {
         await refreshCourses();
         router.push(`/courses/${data.id}`);
       } catch (err) {
+        // 保存失败:允许再次触发,并回到大纲确认页让错误可见
+        assemblingRef.current = false;
         setFormError(err instanceof Error ? err.message : "课程保存失败");
+        setPhase("preview");
       }
-    }
-  }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, outline, allDone, chapterStates]);
 
   async function retryChapter(i: number) {
     if (!outline) return;
@@ -339,7 +355,6 @@ export default function HomePage() {
     await refreshCourses();
   }
 
-  const allDone = chapterStates.every((s) => s.status === "done");
   const failedCount = chapterStates.filter((s) => s.status === "error").length;
   const doneCount = chapterStates.filter((s) => s.status === "done").length;
   const totalCount = chapterStates.length;
@@ -717,6 +732,11 @@ export default function HomePage() {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
+              {formError && (
+                <div className="mb-4 w-full rounded-xl border border-red-200 bg-red-soft px-4 py-3 text-sm text-red">
+                  {formError}
+                </div>
+              )}
               <button
                 onClick={confirmOutline}
                 className="flex-1 rounded-xl bg-ink py-3 text-sm font-semibold text-bg transition hover:bg-accent"
@@ -756,6 +776,7 @@ export default function HomePage() {
             {failedCount > 0 && (
               <button
                 onClick={() => {
+                  assemblingRef.current = false;
                   setOutline(null);
                   setPhase("input");
                 }}
