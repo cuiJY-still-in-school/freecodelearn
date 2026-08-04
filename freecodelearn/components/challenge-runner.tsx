@@ -4,6 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 import { css } from "@codemirror/lang-css";
+import {
+  buildSeedCode,
+  extractEditableCode,
+  sanitizeEditableMarks,
+} from "@/lib/types";
 
 export interface TestResult {
   passed: string[];
@@ -18,6 +23,8 @@ interface Props {
   solution?: string;
   html?: string;
   language?: string;
+  seedBefore?: string;
+  seedAfter?: string;
   onPassed?: () => void;
 }
 
@@ -30,9 +37,25 @@ function test(name, fn) {
     __fcl.failed.push({ name: name, error: String((e && e.message) || e) });
   }
 }
-function assert(cond, msg) {
-  if (!cond) throw new Error(msg || "断言失败");
-}
+const assert = Object.assign(
+  function (cond, msg) {
+    if (!cond) throw new Error(msg || "断言失败");
+  },
+  {
+    ok: (v, m) => { if (!v) throw new Error(m || "expected truthy value"); },
+    isTrue: (v, m) => { if (v !== true) throw new Error(m || "expected true"); },
+    isFalse: (v, m) => { if (v !== false) throw new Error(m || "expected false"); },
+    equal: (a, b, m) => { if (a !== b) throw new Error(m || ("expected " + JSON.stringify(a) + " to equal " + JSON.stringify(b))); },
+    notEqual: (a, b, m) => { if (a === b) throw new Error(m || ("expected " + JSON.stringify(a) + " not to equal " + JSON.stringify(b))); },
+    exists: (v, m) => { if (v == null) throw new Error(m || "expected value to exist"); },
+    isFunction: (v, m) => { if (typeof v !== "function") throw new Error(m || "expected a function"); },
+    lengthOf: (v, n, m) => { if (!v || v.length !== n) throw new Error(m || ("expected length " + (v ? v.length : "undefined") + " to equal " + n)); },
+    match: (s, re, m) => { if (!re.test(s)) throw new Error(m || ("expected string to match " + re)); },
+    notMatch: (s, re, m) => { if (re.test(s)) throw new Error(m || ("expected string not to match " + re)); },
+    include: (s, sub, m) => { if (!String(s).includes(sub)) throw new Error(m || ("expected string to include " + JSON.stringify(sub))); },
+    notInclude: (s, sub, m) => { if (String(s).includes(sub)) throw new Error(m || ("expected string not to include " + JSON.stringify(sub))); }
+  }
+);
 const __log = (...args) => __fcl.logs.push(args.map(a => { try { return typeof a === "string" ? a : JSON.stringify(a); } catch { return String(a); } }).join(" "));
 window.console.log = __log;
 window.onerror = (msg) => { __fcl.fatal = "脚本错误: " + msg; };
@@ -46,19 +69,20 @@ function escapeScript(code: string): string {
   return code.replace(/<\/script/gi, "<\\/script");
 }
 
-function escapeStyle(code: string): string {
-  return code.replace(/<\/style/gi, "<\\/style");
-}
-
 export default function ChallengeRunner({
   starterCode,
   tests,
   solution,
   html,
   language,
+  seedBefore,
+  seedAfter,
   onPassed,
 }: Props) {
-  const [code, setCode] = useState(starterCode);
+  const initial = !seedBefore && !seedAfter
+    ? (starterCode ?? "")
+    : `${seedBefore ?? ""}\n--fcc-editable-region--\n${starterCode ?? ""}\n--fcc-editable-region--\n${seedAfter ?? ""}`;
+  const [code, setCode] = useState(initial);
   const [result, setResult] = useState<TestResult | null>(null);
   const [running, setRunning] = useState(false);
   const [timeoutMsg, setTimeoutMsg] = useState(false);
@@ -67,6 +91,7 @@ export default function ChallengeRunner({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settledRef = useRef(false);
+  const hasSeed = Boolean(seedBefore || seedAfter);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -82,9 +107,10 @@ export default function ChallengeRunner({
   const runRef = useRef<(() => void) | null>(null);
   runRef.current = () => run();
 
-  const isCSS = /css|html/i.test(language ?? "");
+  const isHTML = /html/i.test(language ?? "");
+  const isCSS = !isHTML && /css/i.test(language ?? "");
   const isJS = /javascript/i.test(language ?? "");
-  const isText = !isCSS && !isJS;
+  const isText = !isHTML && !isCSS && !isJS;
 
   const handleMessage = useCallback(
     (e: MessageEvent) => {
@@ -116,17 +142,41 @@ export default function ChallengeRunner({
     setRunning(true);
     settledRef.current = false;
 
-    // CSS/HTML 挑战:用户代码作为 <style> 注入,html 字段作为测试页面 DOM
-    // 其他语言(Shell/Git/SQL 等):用户输入注入为 __fcl_input 字符串,测试用字符串断言
+    // 编辑区代码(用户实际改动部分):freeCodeCamp 的 code 变量,测试可用正则/字符串断言
+    const editable = extractEditableCode(code);
+
     let body: string;
     if (isCSS) {
+      // CSS 挑战:编辑区内容作为 <style> 注入,html 字段为测试页面 DOM
       body = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
-${escapeStyle(code)}
+${sanitizeEditableMarks(code, true)}
 </style>
 </head><body>
 ${html ?? ""}
 <script>
+const __fcl_code = ${JSON.stringify(editable)};
+const code = __fcl_code;
+${HARNESS_PREFIX}
+try {
+${escapeScript(tests)}
+} catch (e) {
+  __fcl.fatal = "测试执行出错: " + String((e && e.message) || e);
+}
+${HARNESS_SUFFIX}
+<\/script>
+</body></html>`;
+    } else if (isHTML) {
+      // HTML 挑战:拼接的文档直接渲染,html 字段作为固定前置结构,编辑区可被 document 与 code 断言
+      body = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>body { font-family: system-ui, sans-serif; }</style>
+</head><body>
+${html ?? ""}
+${sanitizeEditableMarks(code, false)}
+<script>
+const __fcl_code = ${JSON.stringify(editable)};
+const code = __fcl_code;
 ${HARNESS_PREFIX}
 try {
 ${escapeScript(tests)}
@@ -139,7 +189,7 @@ ${HARNESS_SUFFIX}
     } else if (isText) {
       body = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
 <script>
-const __fcl_input = ${JSON.stringify(code)};
+const __fcl_input = ${JSON.stringify(editable)};
 ${HARNESS_PREFIX}
 try {
 ${escapeScript(tests)}
@@ -153,9 +203,11 @@ ${HARNESS_SUFFIX}
       body = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
 ${html ?? ""}
 <script>
+const __fcl_code = ${JSON.stringify(editable)};
+const code = __fcl_code;
 ${HARNESS_PREFIX}
 try {
-${escapeScript(code)}
+${sanitizeEditableMarks(code, true)}
 ${escapeScript(tests)}
 } catch (e) {
   __fcl.fatal = "代码执行出错: " + String((e && e.message) || e);
@@ -179,7 +231,7 @@ ${HARNESS_SUFFIX}
   }
 
   function reset() {
-    setCode(starterCode);
+    setCode(initial);
     setResult(null);
     setTimeoutMsg(false);
     setShowSolution(false);
@@ -222,6 +274,14 @@ ${HARNESS_SUFFIX}
         basicSetup={{ autocompletion: false }}
         className="text-sm"
       />
+      {hasSeed && (
+        <div className="border-t border-line bg-bg-subtle px-5 py-2 text-[11px] text-ink-soft">
+          <span className="font-mono">--fcc-editable-region--</span>
+          <span className="mx-1">↔</span>
+          <span className="font-mono">--fcc-editable-region--</span>
+          之间的代码可以修改,其余为种子代码(无需改动)
+        </div>
+      )}
       <iframe ref={iframeRef} className="hidden" title="test-runner" />
 
       {timeoutMsg && (

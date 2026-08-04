@@ -18,6 +18,38 @@ export interface Step {
   html?: string;
   language?: string;
   questions?: QuizQuestion[];
+  /** 种子代码(可编辑区之前的固定代码,freeCodeCamp --fcc-editable-region-- 模式) */
+  seedBefore?: string;
+  /** 种子代码(可编辑区之后的固定代码) */
+  seedAfter?: string;
+}
+
+/** 编辑区标记,模仿 freeCodeCamp 的 --fcc-editable-region-- */
+export const EDITABLE_MARK = "--fcc-editable-region--";
+
+/** 从拼接内容中提取编辑区代码;无标记时回退为全文 */
+export function extractEditableCode(full: string): string {
+  const re = new RegExp(
+    `\\s*${EDITABLE_MARK}\\s*([\\s\\S]*?)\\s*${EDITABLE_MARK}\\s*`
+  );
+  const m = full.match(re);
+  return m ? m[1].trim() : full;
+}
+
+/** 把编辑区标记替换为当前语言上下文里的注释形式 */
+export function sanitizeEditableMarks(full: string, inStyleOrScript: boolean): string {
+  if (!full.includes(EDITABLE_MARK)) return full;
+  const comment = inStyleOrScript ? "/* --fcc-editable-region-- */" : "<!-- --fcc-editable-region-- -->";
+  return full.replaceAll(EDITABLE_MARK, comment);
+}
+
+/** 拼接种子代码:seedBefore + 标记 + starterCode + 标记 + seedAfter */
+export function buildSeedCode(step: Step): string {
+  const before = step.seedBefore ?? "";
+  const after = step.seedAfter ?? "";
+  const mid = step.starterCode ?? "";
+  if (!before && !after) return mid;
+  return `${before}\n${EDITABLE_MARK}\n${mid}\n${EDITABLE_MARK}\n${after}`;
 }
 
 export interface Chapter {
