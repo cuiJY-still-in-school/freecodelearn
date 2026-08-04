@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import LoginButton from "@/components/login-button";
 
 export default function Nav() {
   const pathname = usePathname();
@@ -38,8 +37,6 @@ export default function Nav() {
           >
             设置
           </Link>
-          <span className="mx-1 h-4 w-px bg-line" />
-          <LoginButton />
         </nav>
       </div>
     </header>

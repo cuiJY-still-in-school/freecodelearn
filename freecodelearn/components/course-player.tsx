@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Course } from "@/lib/types";
 import {
@@ -16,6 +16,19 @@ import CourseSidebar from "@/components/course-sidebar";
 import LessonView from "@/components/lesson-view";
 import ChallengeRunner from "@/components/challenge-runner";
 import QuizView from "@/components/quiz-view";
+
+function isEditableTarget(el: EventTarget | null): boolean {
+  const node = el as HTMLElement | null;
+  if (!node) return false;
+  const tag = node.tagName;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    node.isContentEditable ||
+    Boolean(node.closest(".cm-editor"))
+  );
+}
 
 const STEP_BADGE: Record<string, string> = {
   lesson: "讲解",
@@ -76,6 +89,30 @@ export default function CoursePlayer({ course }: { course: Course }) {
     loadProgress(course.id)
   );
   const [celebrating, setCelebrating] = useState(false);
+
+  // 键盘 ←/→ 切换步骤(编辑器中不触发)
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (isEditableTarget(e.target)) return;
+      if (e.key === "ArrowLeft" && prev) {
+        e.preventDefault();
+        goTo(prev);
+      } else if (e.key === "ArrowRight" && next) {
+        e.preventDefault();
+        goTo(next);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  function clearAllProgress() {
+    if (!window.confirm("确定清除这门课程的全部学习进度吗?")) return;
+    setProgress({});
+    localStorage.removeItem(course.id);
+    const first = flat.length ? flat[0].step.id : "";
+    if (first) goTo(first);
+  }
 
   const step = findStep(course, currentId);
   const doneCount = Object.values(progress).filter(Boolean).length;
@@ -140,6 +177,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
           goTo(id);
           setMobileNav(false);
         }}
+        onClearProgress={clearAllProgress}
         className={`fixed inset-y-0 left-0 z-40 -translate-x-full transition-transform duration-300 lg:static lg:top-14 lg:h-[calc(100vh-3.5rem)] lg:translate-x-0 ${
           mobileNav ? "translate-x-0" : ""
         }`}
@@ -157,6 +195,15 @@ export default function CoursePlayer({ course }: { course: Course }) {
                 <path d="M3 6h18M3 12h18M3 18h18" />
               </svg>
             </button>
+            <Link
+              href="/"
+              className="hidden shrink-0 rounded-lg border border-line p-1.5 text-ink-soft transition hover:bg-bg-subtle hover:text-ink lg:hidden"
+              aria-label="返回课程列表"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+            </Link>
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
               <div
                 className="h-full rounded-full bg-accent transition-all duration-700"

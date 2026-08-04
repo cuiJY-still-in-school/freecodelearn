@@ -41,18 +41,10 @@ interface ChapterState {
   error?: string;
 }
 
-interface AuthUser {
-  id: string;
-  login: string;
-  name: string;
-  avatar: string;
-}
-
 export default function HomePage() {
   const router = useRouter();
   const [courses, setCourses] = useState<CourseMeta[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<AuthUser | null>(null);
 
   // 表单
   const [topic, setTopic] = useState("");
@@ -73,6 +65,9 @@ export default function HomePage() {
   // 导入
   const [importing, setImporting] = useState(false);
 
+  // AI 配置状态
+  const [aiConfigured, setAiConfigured] = useState(true);
+
   useEffect(() => {
     fetch("/api/courses")
       .then((r) => r.json())
@@ -80,9 +75,9 @@ export default function HomePage() {
         setCourses(data);
         setLoading(false);
       });
-    fetch("/api/auth/me")
+    fetch("/api/settings")
       .then((r) => r.json())
-      .then((data) => setUser(data.user ?? null))
+      .then((d) => setAiConfigured(Boolean(d?.apiKey)))
       .catch(() => {});
   }, []);
 
@@ -197,37 +192,29 @@ export default function HomePage() {
   const allDone = chapterStates.every((s) => s.status === "done");
   const failedCount = chapterStates.filter((s) => s.status === "error").length;
 
-  async function togglePublish(c: CourseMeta) {
-    if (!user) {
-      setNotice("请先登录 GitHub 再发布课程");
-      return;
-    }
-    setFormError("");
-    try {
-      const res = c.isPublic
-        ? await fetch(`/api/courses/${c.id}/publish`, { method: "DELETE" })
-        : await fetch(`/api/courses/${c.id}/publish`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "操作失败");
-      await refreshCourses();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "发布失败");
-    }
-  }
+  // ---------- .fcl 导出 / 导入 ----------
 
   async function exportCourse(c: CourseMeta) {
     try {
       const res = await fetch(`/api/courses/${c.id}`);
       const data = await res.json();
-      const blob = new Blob([JSON.stringify(data, null, 2)], {
+      const fcl = {
+        type: "freecodelearn-course",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        course: data,
+        progress: loadProgress(c.id),
+      };
+      const blob = new Blob([JSON.stringify(fcl, null, 2)], {
         type: "application/json",
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${c.title.replace(/[\\/:*?"<>|]/g, "_")}.json`;
+      a.download = `${c.title.replace(/[\\/:*?"<>|]/g, "_")}.fcl`;
       a.click();
       URL.revokeObjectURL(url);
+      setNotice("已导出 .fcl 文件(含课程与学习进度)");
     } catch {
       setNotice("导出失败");
     }
@@ -238,17 +225,38 @@ export default function HomePage() {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
+      // .fcl 打包格式:含 course + progress
+      const isFcl =
+        data?.type === "freecodelearn-course" && data?.course && data?.progress;
+      const coursePayload = isFcl ? data.course : data;
+      const progressPayload = isFcl ? data.progress : null;
+
       const res = await fetch("/api/courses/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(coursePayload),
       });
       const out = await res.json();
       if (!res.ok) throw new Error(out.error ?? "导入失败");
+
+      if (progressPayload) {
+        const course = await (await fetch(`/api/courses/${out.id}`)).json();
+        const keys = new Set(
+          (course.chapters ?? []).flatMap((ch: { steps: { id: string }[] }) =>
+            (ch.steps ?? []).map((s) => s.id)
+          )
+        );
+        const clean: Record<string, string> = {};
+        for (const [k, v] of Object.entries(progressPayload)) {
+          if (keys.has(k) && v) clean[k] = String(v);
+        }
+        localStorage.setItem(`fcl-progress-${out.id}`, JSON.stringify(clean));
+      }
+
       await refreshCourses();
-      alert("课程导入成功!");
+      setNotice(isFcl ? "导入成功,课程与学习进度已恢复" : "课程导入成功!");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "导入失败:文件不是有效的课程 JSON");
+      setNotice(err instanceof Error ? err.message : "导入失败:文件不是有效的课程文件");
     } finally {
       setImporting(false);
     }
@@ -256,6 +264,24 @@ export default function HomePage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
+      {/* AI 未配置横幅 */}
+      {!aiConfigured && (
+        <div className="fade-up mx-auto mb-8 flex max-w-2xl items-center justify-between gap-4 rounded-2xl border border-amber/40 bg-amber-50 px-5 py-4">
+          <div className="text-sm text-amber-800">
+            <p className="font-semibold">尚未配置 AI 服务,无法生成课程</p>
+            <p className="mt-0.5 text-xs text-amber-700/80">
+              去设置页填入 Provider / Base URL / API Key 即可开始
+            </p>
+          </div>
+          <Link
+            href="/settings"
+            className="shrink-0 rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-amber-700"
+          >
+            去配置
+          </Link>
+        </div>
+      )}
+
       {/* Hero */}
       <section className="mb-12 text-center">
         <h1 className="font-serif text-4xl font-bold tracking-tight sm:text-5xl">
@@ -352,7 +378,7 @@ export default function HomePage() {
             </span>
             <input
               type="file"
-              accept=".json,application/json"
+              accept=".fcl,.json,application/json"
               className="hidden"
               disabled={importing}
               onChange={(e) => {
@@ -442,7 +468,22 @@ export default function HomePage() {
 
       {/* 课程列表 */}
       <section className="mt-16">
-        <h2 className="mb-5 font-serif text-2xl font-bold">课程列表</h2>
+        <div className="mb-5 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-serif text-2xl font-bold">课程列表</h2>
+          {!loading && courses.length > 0 && (
+            <span className="text-xs text-ink-soft">
+              共 {courses.length} 门
+              {(() => {
+                const doneCount = courses.filter((c) => {
+                  const prog = loadProgress(c.id);
+                  const done = Object.values(prog).filter(Boolean).length;
+                  return c.stepCount > 0 && done >= c.stepCount;
+                }).length;
+                return doneCount > 0 ? ` · 已完成 ${doneCount} 门` : "";
+              })()}
+            </span>
+          )}
+        </div>
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((i) => (
@@ -473,7 +514,7 @@ export default function HomePage() {
                 {importing ? "导入中..." : "导入课程 JSON"}
                 <input
                   type="file"
-                  accept=".json,application/json"
+                  accept=".fcl,.json,application/json"
                   className="hidden"
                   disabled={importing}
                   onChange={(e) => {
@@ -513,7 +554,7 @@ export default function HomePage() {
                       exportCourse(c);
                     }}
                     className="rounded-lg p-1.5 text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
-                    title="导出课程 JSON"
+                    title="导出 .fcl(课程+进度)"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
@@ -543,11 +584,6 @@ export default function HomePage() {
                   <span className="text-xs text-ink-soft">
                     {c.chapterCount} 章 · {c.stepCount} 步
                   </span>
-                  {c.isPublic && (
-                    <span className="rounded-full bg-green-soft px-2.5 py-0.5 text-xs font-medium text-green">
-                      公开
-                    </span>
-                  )}
                 </div>
                 <h3 className="font-serif text-lg font-bold transition group-hover:text-accent">
                   {c.title}
@@ -559,24 +595,6 @@ export default function HomePage() {
                   <span>{c.language}</span>
                   <span>约 {c.estimatedMinutes} 分钟</span>
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    togglePublish(c);
-                  }}
-                  className={`mt-3 w-full rounded-lg border py-2 text-xs font-medium transition ${
-                    c.isPublic
-                      ? "border-line text-ink-soft hover:border-red-200 hover:bg-red-soft hover:text-red"
-                      : "border-line text-ink-soft hover:border-accent/50 hover:bg-accent/5 hover:text-accent"
-                  }`}
-                >
-                  {c.isPublic
-                    ? user?.login === c.ownerLogin
-                      ? "取消公开"
-                      : "已公开"
-                    : "发布到 GitHub"}
-                </button>
                 {pct > 0 && (
                   <div className="mt-3 flex items-center gap-3">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
