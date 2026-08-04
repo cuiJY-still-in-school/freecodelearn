@@ -6,6 +6,10 @@ export interface GenerateInput {
   level: Course["level"];
   chapters?: number;
   description?: string;
+  /** 用户上传的参考文档全文(用于定制课程内容) */
+  referenceDoc?: string;
+  /** 参考已有课程的结构摘要(用于风格/结构定制) */
+  referenceCourse?: string;
 }
 
 export interface OutlineStep {
@@ -28,6 +32,8 @@ export interface CourseOutline {
   language: string;
   estimatedMinutes: number;
   chapters: OutlineChapter[];
+  /** 参考文档全文(透传给章节生成) */
+  referenceDoc?: string;
 }
 
 const SYSTEM_PROMPT = `你是课程设计专家,擅长设计 freeCodeCamp 风格的循序渐进编程课程。`;
@@ -45,40 +51,45 @@ JSON 结构:
   "chapters": [
     {
       "title": "章节标题",
-      "description": "章节简介(一两句)",
+      "description": "本章目标:学习者学完这章能做什么、项目进展到哪一步(一句话,写结果不写过程)",
       "steps": [
-        { "title": "步骤标题", "type": "lesson|challenge|quiz", "brief": "该步骤要讲的核心内容,2-3 句,供内容生成阶段使用" }
+        { "title": "步骤标题", "type": "lesson|challenge|quiz", "brief": "该步骤要讲的核心内容与精确改动点,2-3 句,供内容生成阶段使用" }
       ]
     }
   ]
 }
 
-设计规则:
-1. 课程必须是一个贯穿始终的真实项目(像 freeCodeCamp 的「Learn HTML by Building a Cat Photo App」):比如「用 HTML/CSS 做一张咖啡菜单页」「用 Python 写一个猜数字游戏」「用 JavaScript 做一个待办清单」。不要在标题里写「入门」「教程」等词,直接叫「用 X 做 Y」
-2. 章节 = 项目的构建阶段:第 1 章搭骨架,中间章逐层加功能,最后一章完善并做综合测验
+设计规则(模仿 freeCodeCamp 真实课程,如「Learn HTML by Building a Cat Photo App」):
+1. 课程必须是一个贯穿始终的真实项目:比如「用 HTML/CSS 做一张咖啡菜单页」「用 Python 写一个猜数字游戏」「用 JavaScript 做一个待办清单」。标题直接叫「用 X 做 Y」,不要写「入门」「教程」等词
+2. 章节 = 项目的构建阶段,像连续剧:第 1 章搭骨架并给出最小可用版本,中间章逐层加功能,最后一章打磨完善并做综合测验。每章结束项目必须处于「可运行、能看到成果」的状态
 3. 循序渐进:每章 3-5 个步骤,先 lesson 讲概念(结合项目讲),再 challenge 动手练,quiz 放在每章末尾
 4. 总步骤数 10-16 个;lesson 约占一半,challenge 3-5 个,quiz 每章 1 个
-5. 挑战要小步渐进:像 freeCodeCamp 的 step 系列,每个挑战只引入一个新概念、只改一处小地方(如「给 h1 加一个 class」),不要一个大挑战塞三个知识点
-6. challenge 步骤的 brief 中写明:改哪里、改什么(精确到元素/函数/值)
-7. 章节数按用户指定的数字(1-12),内容适度即可,不要注水`;
+5. 挑战要小步渐进:像 freeCodeCamp 的 step 系列,每个挑战只引入一个新概念、只改一处小地方(如「给 h1 加一个 class」「给数组排序并赋值」),绝不要一个大挑战塞三个知识点
+6. challenge 步骤的 brief 必须写清楚:改哪里、改成什么(精确到元素/函数/值),让内容作者无需再猜
+7. 每章 quiz 考察「理解」而非「记忆」:用新的小例子检验概念是否真懂(如把本章讲的语法换个场景提问)
+8. 章节数按用户指定的数字(1-12),内容适度即可,不要注水
+
+参考资料(必须遵守):
+- 如果提供了「参考文档」:课程内容必须取材自该文档(文档的技术栈、术语、示例、工作流),大纲先覆盖文档核心内容再扩展
+- 如果提供了「参考课程」:新课程应模仿其项目式结构、步骤粒度与风格,但主题按用户输入,不得照搬参考课程内容`;
 
 const CHAPTER_TASK = `你是课程内容作者。根据大纲中的一章,撰写完整的课程内容,输出严格的 JSON(不要任何多余文字,不要 markdown 代码块)。
 
 教学法(模仿 freeCodeCamp 真实课程,如 Learn HTML by Building a Cat Photo App):
 1. 课程是一个真实项目,挑战是渐进的小步:每个挑战只引入一个新概念,让学习者只改一处小地方
-2. 讲解用 freeCodeCamp 风格:先 1-2 句讲清概念(配示例),再给精确的操作指令(改哪里、写什么、值是什么)
-3. 挑战用「种子代码」模式:seedBefore(编辑区前的固定代码)+ starterCode(编辑区初始内容)+ seedAfter(编辑区后的固定代码)。学习者只改编辑区;种子代码保证页面/程序结构完整,防止改坏。编辑区标记由系统自动添加,不要在字段里写
-4. 判题用 freeCodeCamp hint 风格:4-8 个测试,每个测试只检查一件事;包含「防破坏」断言(检查原有的内容/元素仍然存在)
+2. 描述写法遵循 freeCodeCamp 三步式:① 过渡句衔接上下文(「Now you're ready to start adding content to the page.」式的承上启下,简短一句);② 概念讲解 1-2 句,术语用反引号或加粗(如 HTML 中的 src 属性);③ 精确操作指令:改哪个元素/函数、写什么、值是什么(URL、文本、数值都给全,不让学习者猜)
+3. 挑战用「种子代码」模式:seedBefore(编辑区前的固定代码)+ starterCode(编辑区初始内容)+ seedAfter(编辑区后的固定代码)。种子代码提供完整可运行的结构骨架(如 <!DOCTYPE html>、html/head/body 外壳),编辑区只包住要改的那一小段;学习者只改编辑区。编辑区标记由系统自动添加,不要在字段里写
+4. 判题用 freeCodeCamp hint 风格(见 tests 约定)
 
 JSON 结构(单个对象,包含该章所有步骤):
 {
   "steps": [
     {
       "type": "lesson|challenge|quiz",
-      "bodyMarkdown": "图文讲解(markdown)。lesson:先讲概念,给代码示例,再小结。challenge:概念讲解 + 精确指令",
-      "seedBefore": "仅 challenge:编辑区之前的固定代码(HTML 如 <html><body>,CSS/JS 如公共常量;无则省略)",
+      "bodyMarkdown": "图文讲解(markdown)。lesson:过渡句 + 概念讲解(配代码示例)+ 小结;challenge:过渡句 + 概念 + 精确指令",
+      "seedBefore": "仅 challenge:编辑区之前的固定代码(完整骨架,如 <!DOCTYPE html>...<body>;无骨架时省略)",
       "starterCode": "仅 challenge:编辑区初始内容(学习者要改的部分;无种子代码时则是完整初始代码,含 TODO 注释)",
-      "seedAfter": "仅 challenge:编辑区之后的固定代码(HTML 如 </body></html>;无则省略)",
+      "seedAfter": "仅 challenge:编辑区之后的固定代码(如 </body></html>;无则省略)",
       "solution": "仅 challenge:编辑区的完整参考解答(只含编辑区部分,不含种子代码)",
       "tests": "仅 challenge:判题测试(见下方约定)",
       "html": "仅 challenge 且语言为 CSS:测试页面的 DOM 结构(如 <div class=\"container\"></div>)",
@@ -92,30 +103,42 @@ quiz questions 格式:
 
 quiz 规则:
 - 每章末尾的 quiz 必须有 3-5 题,严禁生成空 questions
-- 同一题内选项必须互不相同;不同题目之间的选项文字也不得完全重复(如多题共用 flex-start/stretch 时,请换用其他干扰项)
+- 考察理解:题目用与讲解不同的新例子,选项区分「听懂了」与「只记住例子」的人
+- 同一题内选项必须互不相同;不同题目之间的选项文字也不得完全重复
 - correctIndex 必须在 options 下标范围内,正确答案唯一
+- explanation 要说明正确选项为什么对,以及常见错误选项错在哪
 
 challenge tests 约定(运行在浏览器沙箱中,测试内可用):
 - code:编辑区代码字符串(适合正则/包含检查:标签小写、元素数量、是否用了某个语法)
 - document:页面渲染后的 DOM(适合检查元素存在、文本、嵌套、顺序、样式)
 - __fcl_input:仅非代码语言(Shell/Git/SQL 等),用户输入全文
-- 语言为 HTML 的挑战:编辑区是 HTML 代码,渲染后可用 document 断言;例如:
+- 测试写法模仿 freeCodeCamp hints 的「由宽到严」结构,按下列顺序组织:
+  ① 存在性:元素/函数/关键词存在(如 assert.exists / document.querySelector('h1'))
+  ② 结构性:数量正确(如 querySelectorAll('h1').length === 1,防学习者写了多个)、嵌套正确(父元素正确)、顺序正确(在另一个元素之后)
+  ③ 值检查(宽松):文本小写化后匹配(如 textContent.trim().toLowerCase() === 'catphotoapp',允许大小写差异)
+  ④ 值检查(严格):精确匹配(大小写敏感),让学习者注意大小写
+  ⑤ 规范性/细节:引号包裹、空格位置等最佳实践(如 assert.notMatch 检查属性值没有不带引号)
+- 每个 hint 的失败信息必须像 freeCodeCamp 一样写「人话 + 细节提示」:指出可能的原因(「你可能拼写有误」「注意大小写」「确保元素名和属性名之间有空格」),而不是只报断言失败
+- 语言为 HTML 的挑战:编辑区是 HTML 代码,渲染后可用 document 断言;同时用 code 正则断言(小写、闭合、引号)。例如:
   test("h2 标签应为小写", () => { assert.notMatch(code, /<\\/?H2>/); });
   test("存在 h2", () => { assert(document.querySelector("h2")); });
-  test("h2 文本为 猫照片", () => { assert(document.querySelector("h2").innerText.trim() === "猫照片"); });
+  test("h2 文本为 猫照片(宽松)", () => { assert(document.querySelector("h2").innerText.trim().toLowerCase() === "猫照片"); });
+  test("h2 文本精确为 猫照片", () => { assert(document.querySelector("h2").innerText.trim() === "猫照片"); });
   test("h2 在 h1 下方", () => { const order=[...document.querySelectorAll("h1,h2")].map(n=>n.tagName); assert(order.indexOf("H1") < order.indexOf("H2")); });
   test("h1 未被改坏", () => { assert(document.querySelector("h1").innerText.trim() === "猫照片应用"); });
+  test("只有一个 h1", () => { assert(document.querySelectorAll("h1").length === 1); });
 - 语言为 CSS 的挑战:编辑区是 CSS,会作为 <style> 注入;必须提供 html(测试用 DOM);用 document.querySelector 和 getComputedStyle 断言
-- 语言为 JavaScript 的挑战:编辑区代码自动执行,直接调用用户函数;覆盖正常情况和边界情况(空数组、负数、0 等)
+- 语言为 JavaScript 的挑战:编辑区代码自动执行,直接调用用户函数;覆盖正常情况和边界情况(空数组、负数、0 等);加防破坏断言(题目要求保留的其他函数/逻辑仍然存在)
 - 其他语言(Shell/Git/SQL/命令工具等):用户输入在 __fcl_input 中,用字符串断言,例如:
   test("包含 git init", () => { assert(__fcl_input.includes("git init"), "应包含 git init 命令"); });
-- 每个挑战至少 4 个测试,每个测试只检查一件事;包含防破坏断言;不要依赖未导入的外部库
+- 每个挑战至少 4 个测试,每个测试只检查一件事;失败信息用中文人话;不要依赖未导入的外部库
 
 写作要求:
 1. 严格遵循大纲中该章步骤的 title/type/brief,顺序一致,不要增删步骤
-2. bodyMarkdown 用简体中文,讲解要具体、有示例,循序渐进
+2. bodyMarkdown 用简体中文,讲解要具体、有示例,循序渐进;术语第一次出现时给出简短解释
 3. 所有语言的 challenge 都必须提供 starterCode、solution、tests;HTML 挑战按需给 seedBefore/seedAfter(要检查结构完整性时必给),CSS 挑战必须给 html
-4. 只输出 JSON,不要多余文字`;
+4. 若有「参考文档」:讲解与示例取材于参考文档的技术栈与术语,保持一致性
+5. 只输出 JSON,不要多余文字`;
 
 async function chat(
   userPrompt: string,
@@ -250,10 +273,19 @@ export async function guardTopic(
 /* ---------- 大纲生成 ---------- */
 
 export async function generateOutline(input: GenerateInput): Promise<CourseOutline> {
+  const refDoc = (input.referenceDoc ?? "").slice(0, 30000);
   const userPrompt = `请设计课程大纲。\n主题:${input.topic}\n难度:${input.level}${
     input.chapters ? `\n章节数:${input.chapters}` : ""
   }${
     input.description ? `\n补充说明:${input.description}` : ""
+  }${
+    refDoc
+      ? `\n\n参考文档(课程内容必须取材于此,术语/示例/工作流保持一致):\n"""\n${refDoc}\n"""`
+      : ""
+  }${
+    input.referenceCourse
+      ? `\n\n参考课程(模仿其项目式结构与步骤粒度,但内容按本主题原创):\n"""\n${input.referenceCourse}\n"""`
+      : ""
   }\n\n${OUTLINE_TASK}`;
 
   const content = await chat(userPrompt, true);
@@ -295,6 +327,7 @@ export async function generateOutline(input: GenerateInput): Promise<CourseOutli
     language: String(raw.language ?? "JavaScript"),
     estimatedMinutes: Number(raw.estimatedMinutes ?? 30) || 30,
     chapters,
+    referenceDoc: refDoc || undefined,
   };
 }
 
@@ -303,15 +336,42 @@ export async function generateOutline(input: GenerateInput): Promise<CourseOutli
 const TEST_TASK = `你是测试工程师。为下面的代码挑战编写自动判题测试,输出严格 JSON(不要任何多余文字):
 {"tests": "JavaScript 测试代码", "html": "CSS 语言时提供的测试 DOM 结构,其他语言为空字符串"}
 
-测试约定(运行在浏览器沙箱中):
+测试约定(运行在浏览器沙箱中,模仿 freeCodeCamp hints 的写法):
 - test(name, fn) 定义测试,fn 内用 assert(condition, message);每个测试只检查一件事
 - 可用变量:code(编辑区代码字符串,可正则断言)、document(渲染后 DOM)、__fcl_input(非代码语言全文)
-- HTML 语言:编辑区是 HTML,用 document 断言 + code 正则断言(小写、数量、顺序)
+- 每个测试的失败信息必须写「人话 + 细节提示」(如「你可能拼写有误」「注意大小写」「确保元素名和属性名之间有空格」),像 freeCodeCamp 的 hint 一样指出可能原因
+- 断言按「由宽到严」组织:① 存在性 → ② 结构性(数量/嵌套/顺序)→ ③ 值宽松(小写化匹配)→ ④ 值严格(大小写敏感)→ ⑤ 规范性(引号/空格)
+- HTML 语言:编辑区是 HTML,用 document 断言 + code 正则断言(小写、闭合、引号);数量断言防重复(如 h1 只能有一个)
 - CSS 语言:用户 CSS 注入为 <style>;html 必须包含测试引用的所有元素;用 document.querySelector + getComputedStyle
-- JS 语言:用户代码自动执行,直接调用函数;覆盖正常与边界情况(空数组、负数、0)
-- 其他语言(Shell/Git/SQL):用 __fcl_input.includes(...) 断言
-- 至少 3 个测试;包含防破坏断言(题目要求保留的原有内容仍然存在)
+- JS 语言:用户代码自动执行,直接调用函数;覆盖正常与边界情况(空数组、负数、0);加防破坏断言(题目要求保留的原有函数/逻辑仍在)
+- 其他语言(Shell/Git/SQL):用 __fcl_input.includes(...) 断言;可加 notInclude 防学习者多写多余内容
+- 至少 4 个测试;测试名字用中文简要描述检查点
 - 只输出 JSON`;
+
+/** 从 AI 输出中提取 tests 字符串:可能是字符串,也可能是结构化数组/对象 */
+function extractTests(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (Array.isArray(v)) {
+    return v
+      .map((item) => {
+        if (typeof item === "string") return item;
+        const o = (item ?? {}) as Record<string, unknown>;
+        return String(o.test ?? o.code ?? o.assert ?? "");
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return String(o.test ?? o.code ?? o.assert ?? "");
+  }
+  return "";
+}
+
+/** 判断 tests 是否是可执行的判题代码(含 test() 或 assert 调用) */
+function testsUsable(tests?: string): boolean {
+  return Boolean(tests && /test\s*\(|assert\.|__fcl_input|document\.querySelector/.test(tests));
+}
 
 async function generateTests(step: Step): Promise<void> {
   const userPrompt = `题目:${step.title}\n语言:${step.language}\n\n题目说明:\n${
@@ -323,7 +383,8 @@ async function generateTests(step: Step): Promise<void> {
   }\n\n参考解答:\n${step.solution ?? ""}\n\n${TEST_TASK}`;
   const content = await chat(userPrompt, true);
   const raw = parseJSON(content);
-  if (raw.tests) step.tests = String(raw.tests);
+  const tests = extractTests(raw.tests);
+  if (tests) step.tests = tests;
   if (raw.html) step.html = String(raw.html);
 }
 
@@ -336,7 +397,11 @@ export async function generateChapter(
 
   const userPrompt = `课程信息:\n标题:${outline.title}\n语言:${outline.language}\n难度:${outline.level}\n\n本章标题:${chapter.title}\n本章简介:${chapter.description}\n\n本章步骤(必须全部覆盖,顺序一致):\n${chapter.steps
     .map((s, i) => `${i + 1}. [${s.type}] ${s.title}\n   brief: ${s.brief}`)
-    .join("\n")}\n\n请生成本章全部步骤内容。${CHAPTER_TASK}`;
+    .join("\n")}${
+    outline.referenceDoc
+      ? `\n\n参考文档(讲解与示例取材于此,术语/示例保持一致):\n"""\n${outline.referenceDoc}\n"""`
+      : ""
+  }\n\n请生成本章全部步骤内容。${CHAPTER_TASK}`;
 
   const content = await chat(userPrompt, true);
   const raw = parseJSON(content);
@@ -355,7 +420,8 @@ export async function generateChapter(
     if (type === "challenge") {
       step.starterCode = rs.starterCode ? String(rs.starterCode) : undefined;
       step.solution = rs.solution ? String(rs.solution) : undefined;
-      step.tests = rs.tests ? String(rs.tests) : undefined;
+      const tests = extractTests(rs.tests);
+      step.tests = tests || undefined;
       step.html = rs.html ? String(rs.html) : undefined;
       step.seedBefore = rs.seedBefore ? String(rs.seedBefore) : undefined;
       step.seedAfter = rs.seedAfter ? String(rs.seedAfter) : undefined;
@@ -374,16 +440,18 @@ export async function generateChapter(
     return step;
   });
 
-  // 为所有缺测试的挑战补充自动判题(JS/CSS/HTML 用代码模式,其他语言用 __fcl_input 文本断言)
+  // 为所有缺测试或测试不可执行的挑战补自动判题(JS/CSS/HTML 用代码模式,其他语言用 __fcl_input 文本断言)
   const challenges = steps.filter(
-    (s) => s.type === "challenge" && !s.tests
+    (s) => s.type === "challenge" && !testsUsable(s.tests)
   );
   await Promise.all(
     challenges.map(async (s) => {
       try {
         await generateTests(s);
+        if (!testsUsable(s.tests)) s.tests = undefined;
       } catch {
         // 测试生成失败则降级:无自动判题,保留查看解答
+        s.tests = undefined;
       }
     })
   );
@@ -423,22 +491,24 @@ export async function generateChapter(
 
 const APPEND_TASK = `你是课程内容作者。为已有课程追加一个全新的章节,输出严格 JSON(不要任何多余文字)。
 
-教学法与课程生成完全一致:课程是真实项目,挑战是渐进小步,用种子代码(seedBefore/starterCode/seedAfter)保护结构,测试用 freeCodeCamp hint 风格(每个测试只查一件事,含防破坏断言)。
+教学法与课程生成完全一致:课程是真实项目,挑战是渐进小步,用种子代码(seedBefore/starterCode/seedAfter)保护结构;描述用「过渡句 + 概念 + 精确指令」三步式;测试用 freeCodeCamp hint 风格(每个测试只查一件事,失败信息写人话+细节提示,含防破坏断言,断言由宽到严)。
 
 JSON 结构:
 {"steps": [步骤数组,格式与单章生成完全一致(见下方说明)]}
 
 步骤格式与生成规则(与单章生成相同):
-- lesson:{"type":"lesson","bodyMarkdown":"图文讲解(markdown),先讲概念再给示例"}
-- challenge:{"type":"challenge","bodyMarkdown":"概念讲解+精确指令","seedBefore":"编辑区前固定代码(可选)","starterCode":"编辑区初始内容","seedAfter":"编辑区后固定代码(可选)","solution":"编辑区完整参考解答","tests":"判题测试","html":"仅 CSS 语言需要(测试 DOM)"}
-- quiz:{"type":"quiz","questions":[{"question":"题干","options":["A","B","C"],"correctIndex":0,"explanation":"解析"}]}(3-5 题,选项互不重复,correctIndex 在范围内)
+- lesson:{"type":"lesson","bodyMarkdown":"图文讲解(markdown),过渡句衔接课程进度,先讲概念再给示例,术语第一次出现给出解释"}
+- challenge:{"type":"challenge","bodyMarkdown":"过渡句+概念讲解+精确指令","seedBefore":"编辑区前固定代码(可选)","starterCode":"编辑区初始内容","seedAfter":"编辑区后固定代码(可选)","solution":"编辑区完整参考解答","tests":"判题测试","html":"仅 CSS 语言需要(测试 DOM)"}
+- quiz:{"type":"quiz","questions":[{"question":"题干","options":["A","B","C"],"correctIndex":0,"explanation":"解析"}]}(3-5 题,考察理解用新例子,选项互不重复,correctIndex 在范围内)
 
 challenge tests 约定(运行在浏览器沙箱):
 - 可用变量:code(编辑区代码,可正则断言)、document(渲染后 DOM)、__fcl_input(非代码语言全文)
-- HTML 语言:编辑区是 HTML,用 document 断言 + code 断言(小写、数量、顺序)
+- 断言由宽到严:存在性 → 结构性(数量/嵌套/顺序)→ 值宽松 → 值严格(大小写)→ 规范性(引号/空格)
+- 失败信息写人话+细节提示(拼写/大小写/空格等可能原因)
+- HTML 语言:编辑区是 HTML,用 document 断言 + code 断言(小写、闭合、引号),数量断言防重复
 - CSS 语言:编辑区是 CSS 注入为 <style>,html 提供测试 DOM,用 getComputedStyle 断言
-- JS 语言:编辑区代码自动执行,直接调用函数,覆盖边界情况
-- 其他语言(Shell/Git/SQL):用 __fcl_input.includes(...) 断言
+- JS 语言:编辑区代码自动执行,直接调用函数,覆盖边界情况,加防破坏断言
+- 其他语言(Shell/Git/SQL):用 __fcl_input.includes(...) 断言,可加 notInclude 防多余内容
 - 每个挑战至少 4 个测试,每个测试只查一件事,含防破坏断言
 - 每个挑战必须同时提供 starterCode、solution、tests;quiz 必须有 questions
 - bodyMarkdown 用简体中文,循序渐进,与课程既有风格一致
@@ -475,7 +545,8 @@ export async function appendChapter(
     if (type === "challenge") {
       step.starterCode = r.starterCode ? String(r.starterCode) : undefined;
       step.solution = r.solution ? String(r.solution) : undefined;
-      step.tests = r.tests ? String(r.tests) : undefined;
+      const tests = extractTests(r.tests);
+      step.tests = tests || undefined;
       step.html = r.html ? String(r.html) : undefined;
       step.seedBefore = r.seedBefore ? String(r.seedBefore) : undefined;
       step.seedAfter = r.seedAfter ? String(r.seedAfter) : undefined;
@@ -494,14 +565,17 @@ export async function appendChapter(
     return step;
   });
 
-  // 补测试与 starter/solution
-  const challenges = steps.filter((s) => s.type === "challenge" && !s.tests);
+  // 补测试与 starter/solution(跳过描述性无效测试)
+  const challenges = steps.filter(
+    (s) => s.type === "challenge" && !testsUsable(s.tests)
+  );
   await Promise.all(
     challenges.map(async (s) => {
       try {
         await generateTests(s);
+        if (!testsUsable(s.tests)) s.tests = undefined;
       } catch {
-        // 忽略
+        s.tests = undefined;
       }
     })
   );

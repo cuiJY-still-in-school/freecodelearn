@@ -192,6 +192,7 @@ ${HARNESS_SUFFIX}
       body = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
 <script>
 const __fcl_input = ${JSON.stringify(editable)};
+const code = __fcl_input;
 ${HARNESS_PREFIX}
 try {
 ${escapeScript(tests)}
