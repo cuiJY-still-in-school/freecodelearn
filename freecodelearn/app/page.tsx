@@ -53,6 +53,12 @@ export default function HomePage() {
   const [extra, setExtra] = useState("");
   const [formError, setFormError] = useState("");
 
+  // 定制化:参考文档 + 参考课程
+  const [refDoc, setRefDoc] = useState<{ name: string; text: string } | null>(null);
+  const [refDocError, setRefDocError] = useState("");
+  const [refCourseId, setRefCourseId] = useState("");
+  const [refCourseSummary, setRefCourseSummary] = useState("");
+
   // 流程
   const [phase, setPhase] = useState<"input" | "preview" | "generating" | "done">("input");
   const [outline, setOutline] = useState<CourseOutline | null>(null);
@@ -140,13 +146,63 @@ export default function HomePage() {
     const res = await fetch("/api/ai/outline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic, level, chapters, description: extra || undefined }),
+      body: JSON.stringify({
+        topic,
+        level,
+        chapters,
+        description: extra || undefined,
+        referenceDoc: refDoc?.text,
+        referenceCourse: refCourseSummary || undefined,
+      }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "大纲生成失败");
     setOutline(data);
     // 进入大纲确认:先看 AI 理解的主题与章节结构,确认后再生成全部章节
     setPhase("preview");
+  }
+
+  // 参考课程:拉取详情,构造结构摘要供 AI 模仿
+  async function selectRefCourse(id: string) {
+    setRefCourseId(id);
+    setRefCourseSummary("");
+    if (!id) return;
+    try {
+      const res = await fetch(`/api/courses/${id}`);
+      const c = await res.json();
+      const summary = [
+        `标题:${c.title}`,
+        `语言:${c.language} · 难度:${c.level}`,
+        ...(c.chapters ?? []).map(
+          (ch: { title: string; steps: { title: string; type: string }[] }, i: number) =>
+            `第${i + 1}章《${ch.title}》(${ch.steps.length} 步):` +
+            ch.steps.map((s) => `${s.title}[${s.type}]`).join("、")
+        ),
+      ].join("\n");
+      setRefCourseSummary(summary.slice(0, 6000));
+    } catch {
+      setRefCourseId("");
+      setFormError("读取参考课程失败,请重试");
+    }
+  }
+
+  // 参考文档:读取文本(支持 txt/md/json 与常见代码文件)
+  async function loadRefDoc(f: File) {
+    setRefDocError("");
+    if (!/\.(txt|md|json|js|ts|py|html|css|sql|csv|yml|yaml|sh|go|rs|java|c|cpp)$/i.test(f.name)) {
+      setRefDocError("暂不支持该文件类型,请使用 txt / md / 代码文件");
+      return;
+    }
+    if (f.size > 512 * 1024) {
+      setRefDocError("文件过大(限 512KB),请截取核心内容后重试");
+      return;
+    }
+    try {
+      const text = await f.text();
+      setRefDoc({ name: f.name, text: text.slice(0, 30000) });
+    } catch {
+      setRefDocError("读取文件失败,请重试");
+    }
   }
 
   async function regenerateOutline() {
@@ -421,6 +477,66 @@ export default function HomePage() {
             placeholder="补充说明(可选):希望侧重什么、包含哪些知识点..."
             className="mb-5 w-full rounded-xl border border-line bg-bg px-4 py-3 text-sm outline-none transition focus:border-accent"
           />
+
+          {/* 定制化:参考课程 + 参考文档 */}
+          <div className="mb-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink-soft">
+                参考课程(可选)
+              </label>
+              <select
+                value={refCourseId}
+                onChange={(e) => selectRefCourse(e.target.value)}
+                className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm outline-none transition focus:border-accent"
+              >
+                <option value="">不参考,全新设计</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title}
+                  </option>
+                ))}
+              </select>
+              {refCourseSummary && (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-ink-soft">
+                  已加载参考结构:{refCourseSummary.split("\n")[0]} ·
+                  {refCourseSummary.split("\n").slice(2).length} 章 —— 新课程将模仿其结构
+                  与步骤粒度
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink-soft">
+                参考文档(可选)
+              </label>
+              <label className="flex cursor-pointer items-center justify-between rounded-xl border border-dashed border-line bg-bg px-3 py-2.5 text-sm transition hover:border-accent/50">
+                <span className="truncate text-ink-soft">
+                  {refDoc ? `📄 ${refDoc.name}` : "上传文档供 AI 参考(txt / md / 代码)"}
+                </span>
+                <input
+                  type="file"
+                  accept=".txt,.md,.json,.js,.ts,.py,.html,.css,.sql,.csv,.yml,.yaml,.sh,.go,.rs,.java,.c,.cpp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) loadRefDoc(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {refDoc && (
+                <button
+                  type="button"
+                  onClick={() => setRefDoc(null)}
+                  className="mt-1.5 text-[11px] text-red transition hover:text-red-700"
+                >
+                  移除文档
+                </button>
+              )}
+              {refDocError && (
+                <p className="mt-1.5 text-[11px] text-red">{refDocError}</p>
+              )}
+            </div>
+          </div>
           {formError && (
             <div className="mb-4 rounded-xl border border-red-200 bg-red-soft px-4 py-3 text-sm text-red">
               {formError}
