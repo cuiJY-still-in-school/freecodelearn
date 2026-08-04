@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Course } from "@/lib/types";
 import type { ProgressMap } from "@/lib/progress";
@@ -29,11 +29,34 @@ export default function CourseSidebar({
   className,
 }: Props) {
   const activeRef = useRef<HTMLButtonElement>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   // 当前步骤跟随:切换步骤时把激活项滚动到侧边栏可见区域
   useEffect(() => {
     activeRef.current?.scrollIntoView({ block: "nearest" });
   }, [currentStepId]);
+
+  // 当前步骤所在章节自动展开
+  useEffect(() => {
+    setCollapsed((prev) => {
+      const chapter = course.chapters.find((c) =>
+        c.steps.some((s) => s.id === currentStepId)
+      );
+      if (!chapter || !prev.has(chapter.id)) return prev;
+      const next = new Set(prev);
+      next.delete(chapter.id);
+      return next;
+    });
+  }, [currentStepId, course.chapters]);
+
+  function toggleChapter(id: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <aside
@@ -59,17 +82,38 @@ export default function CourseSidebar({
       <nav className="space-y-5">
         {course.chapters.map((chapter, ci) => {
           const doneIn = chapter.steps.filter((s) => progress[s.id]).length;
+          const isCollapsed = collapsed.has(chapter.id);
           return (
             <div key={chapter.id}>
-              <div className="mb-1.5 flex items-center justify-between px-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
+              <button
+                onClick={() => toggleChapter(chapter.id)}
+                title={isCollapsed ? "展开章节" : "折叠章节"}
+                className="mb-1.5 flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
+              >
+                <span>
                   {ci + 1} · {chapter.title}
                 </span>
-                <span className="font-mono text-[10px] text-ink-soft/70">
-                  {doneIn}/{chapter.steps.length}
+                <span className="flex items-center gap-1.5">
+                  <span className="font-mono text-[10px] text-ink-soft/70">
+                    {doneIn}/{chapter.steps.length}
+                  </span>
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`transition-transform ${isCollapsed ? "-rotate-90" : ""}`}
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
                 </span>
-              </div>
-              {chapter.steps.map((step) => {
+              </button>
+              {!isCollapsed &&
+                chapter.steps.map((step) => {
                 const done = progress[step.id];
                 const active = step.id === currentStepId;
                 return (
@@ -96,8 +140,7 @@ export default function CourseSidebar({
               })}
             </div>
           );
-        })}
-      </nav>
+        })}      </nav>
       <div className="mt-6 border-t border-line pt-4">
         <button
           onClick={onClearProgress}
