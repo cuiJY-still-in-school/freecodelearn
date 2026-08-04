@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Course } from "@/lib/types";
 import {
@@ -89,6 +89,9 @@ export default function CoursePlayer({ course }: { course: Course }) {
     loadProgress(course.id)
   );
   const [celebrating, setCelebrating] = useState(false);
+  // 通过后跳转前提示(2 秒倒计时,可手动立即进入)
+  const [passedFlash, setPassedFlash] = useState(false);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 键盘 ←/→ 切换步骤(编辑器中不触发)
   useEffect(() => {
@@ -144,7 +147,28 @@ export default function CoursePlayer({ course }: { course: Course }) {
 
   function goTo(id: string) {
     setCurrentId(id);
+    setPassedFlash(false);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // 通过后:标记完成 → 显示成功横幅 → 2 秒后自动进入下一步(可手动立即进入)
+  function handlePassed(status: "passed" | "correct") {
+    markDone(step?.id ?? currentId, status);
+    if (!next) return;
+    setPassedFlash(true);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => {
+      setPassedFlash(false);
+      goTo(next);
+    }, 2000);
+  }
+
+  function jumpNext() {
+    if (!next) return;
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    setPassedFlash(false);
+    goTo(next);
   }
 
   const next = nextStepId(course, currentId);
@@ -259,6 +283,21 @@ export default function CoursePlayer({ course }: { course: Course }) {
               </span>
             )}
           </div>
+
+          {/* 通过成功横幅 */}
+          {passedFlash && next && (
+            <div className="fade-up mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-green/30 bg-green-soft px-5 py-4">
+              <span className="text-sm font-semibold text-green">
+                ✓ 全部通过!即将进入下一步
+              </span>
+              <button
+                onClick={jumpNext}
+                className="rounded-xl bg-green px-5 py-2 text-sm font-semibold text-white transition hover:bg-green-700"
+              >
+                进入下一步 →
+              </button>
+            </div>
+          )}
           <h1 className="mb-8 font-serif text-3xl font-bold tracking-tight">
             {step.title}
           </h1>
@@ -279,14 +318,14 @@ export default function CoursePlayer({ course }: { course: Course }) {
                 language={step.language}
                 seedBefore={step.seedBefore}
                 seedAfter={step.seedAfter}
-                onPassed={() => {
-                  markDone(step.id, "passed");
-                  if (next) window.setTimeout(() => goTo(next), 600);
-                }}
+                onPassed={() => handlePassed("passed")}
               />
               {!step.tests && (
                 <button
-                  onClick={() => markDone(step.id, "done")}
+                  onClick={() => {
+                    markDone(step.id, "done");
+                    if (next) window.setTimeout(() => goTo(next), 600);
+                  }}
                   className="mt-4 rounded-xl border border-line px-4 py-2 text-sm text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
                 >
                   标记为已完成
@@ -299,10 +338,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
             (step.questions && step.questions.length > 0 ? (
               <QuizView
                 questions={step.questions}
-                onComplete={() => {
-                  markDone(step.id, "correct");
-                  if (next) window.setTimeout(() => goTo(next), 800);
-                }}
+                onComplete={() => handlePassed("correct")}
               />
             ) : (
               <button

@@ -443,28 +443,6 @@ export default function HomePage() {
           <p className="mt-3 text-center text-xs text-ink-soft">
             输入主题即可,编程语言由 AI 自动判断 —— 生成完成后直接进入学习
           </p>
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-            {[
-              "Python 爬虫入门",
-              "JavaScript 数组方法",
-              "Git 与 GitHub",
-              "SQL 数据库查询",
-              "Shell 脚本",
-              "HTML/CSS 网页制作",
-            ].map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => {
-                  setTopic(t);
-                  topicRef.current?.focus();
-                }}
-                className="rounded-full border border-line bg-bg-subtle px-3 py-1 text-xs text-ink-soft transition hover:border-accent/50 hover:text-accent"
-              >
-                {t}
-              </button>
-            ))}
-          </div>
           <label className="mt-4 block cursor-pointer text-center text-xs text-ink-soft transition hover:text-accent">
             <span className="inline-flex items-center gap-1">
               {importing ? "导入中..." : "⬆ 导入 .fcl 课程"}
