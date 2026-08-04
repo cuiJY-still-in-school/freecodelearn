@@ -15,6 +15,7 @@ interface Props {
   currentStepId: string;
   progress: ProgressMap;
   onNavigate: (stepId: string) => void;
+  onClearProgress: () => void;
   className?: string;
 }
 
@@ -23,6 +24,7 @@ export default function CourseSidebar({
   currentStepId,
   progress,
   onNavigate,
+  onClearProgress,
   className,
 }: Props) {
   return (
@@ -87,6 +89,14 @@ export default function CourseSidebar({
           );
         })}
       </nav>
+      <div className="mt-6 border-t border-line pt-4">
+        <button
+          onClick={onClearProgress}
+          className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-ink-soft transition hover:bg-red-soft hover:text-red"
+        >
+          清除学习进度
+        </button>
+      </div>
     </aside>
   );
 }

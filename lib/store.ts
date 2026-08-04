@@ -3,7 +3,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import type { Course } from "./types";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const DATA_DIR = path.join(process.env.FCL_DATA_DIR || process.cwd(), "data");
 const COURSES_DIR = path.join(DATA_DIR, "courses");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 
@@ -28,8 +28,6 @@ export interface CourseMeta {
   createdAt: string;
   stepCount: number;
   chapterCount: number;
-  ownerLogin?: string;
-  isPublic?: boolean;
 }
 
 async function ensureDirs() {
@@ -126,8 +124,6 @@ export function toMeta(course: Course): CourseMeta {
     createdAt: course.createdAt,
     stepCount,
     chapterCount: course.chapters.length,
-    ownerLogin: course.ownerLogin,
-    isPublic: course.isPublic,
   };
 }
 
