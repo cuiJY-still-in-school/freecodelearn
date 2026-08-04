@@ -5,17 +5,11 @@
   "description": "AI 生成编程课程 - 输入主题,几分钟获得一门 freeCodeCamp 风格的完整课程",
   "author": "FreeCodeLearn",
   "homepage": "https://github.com/",
-  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "electron:dev": "electron .",
-    "electron:server": "bash scripts/package-server.sh",
-    "electron:linux": "bash scripts/package-server.sh && electron-builder --linux",
-    "electron:win": "bash scripts/package-server.sh && electron-builder --win",
-    "electron:mac": "bash scripts/package-server.sh && electron-builder --mac"
+    "lint": "eslint"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
@@ -31,8 +25,6 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "electron": "^43.2.0",
-    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",
