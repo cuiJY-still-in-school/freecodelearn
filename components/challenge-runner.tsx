@@ -133,7 +133,10 @@ export default function ChallengeRunner({
 
   useEffect(() => {
     window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, [handleMessage]);
 
   function run() {

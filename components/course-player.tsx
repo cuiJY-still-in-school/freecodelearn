@@ -75,19 +75,25 @@ export default function CoursePlayer({ course }: { course: Course }) {
   const flat = useMemo(() => flattenSteps(course), [course]);
   const total = countSteps(course);
 
-  const [currentId, setCurrentId] = useState<string>(() => {
-    const saved = loadProgress(course.id);
-    const firstUndone = flat.find((f) => !saved[f.step.id]);
-    if (firstUndone) return firstUndone.step.id;
-    return flat.length ? flat[flat.length - 1].step.id : firstStepId(course);
-  });
+  const [currentId, setCurrentId] = useState<string>(() =>
+    flat.length ? flat[0].step.id : firstStepId(course)
+  );
   const [mobileNav, setMobileNav] = useState(false);
   const [appendTitle, setAppendTitle] = useState("");
   const [appending, setAppending] = useState(false);
   const [appendMsg, setAppendMsg] = useState("");
-  const [progress, setProgress] = useState<ProgressMap>(() =>
-    loadProgress(course.id)
-  );
+  const [progress, setProgress] = useState<ProgressMap>({});
+
+  // 客户端挂载后按本地进度定位到第一个未完成步骤(SSR 阶段统一渲染第一步骤,避免 hydration mismatch)
+  useEffect(() => {
+    const saved = loadProgress(course.id);
+    setProgress(saved);
+    const firstUndone = flat.find((f) => !saved[f.step.id]);
+    if (firstUndone) setCurrentId(firstUndone.step.id);
+    else if (Object.keys(saved).length > 0 && flat.length)
+      setCurrentId(flat[flat.length - 1].step.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course.id]);
   const [celebrating, setCelebrating] = useState(false);
   // 通过后跳转前提示(2 秒倒计时,可手动立即进入)
   const [passedFlash, setPassedFlash] = useState(false);
