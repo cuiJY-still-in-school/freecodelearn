@@ -68,6 +68,12 @@ export default function HomePage() {
   // AI 配置状态
   const [aiConfigured, setAiConfigured] = useState(true);
 
+  // 无关主题确认
+  const [guardPending, setGuardPending] = useState<{
+    topic: string;
+    reason: string;
+  } | null>(null);
+
   useEffect(() => {
     fetch("/api/courses")
       .then((r) => r.json())
@@ -77,9 +83,16 @@ export default function HomePage() {
       });
     fetch("/api/settings")
       .then((r) => r.json())
-      .then((d) => setAiConfigured(Boolean(d?.apiKey)))
+      .then((d) => {
+        const configured = Boolean(d?.apiKey);
+        setAiConfigured(configured);
+        if (!configured && !sessionStorage.getItem("fcl-ai-guide-shown")) {
+          sessionStorage.setItem("fcl-ai-guide-shown", "1");
+          router.push("/settings?first=1");
+        }
+      })
       .catch(() => {});
-  }, []);
+  }, [router]);
 
   async function refreshCourses() {
     const res = await fetch("/api/courses");
@@ -91,21 +104,36 @@ export default function HomePage() {
     setFormError("");
     setGenerating(true);
     try {
-      const res = await fetch("/api/ai/outline", {
+      // 主题相关度把关:无关主题(如烹饪)提示用户,但允许硬生成
+      const guardRes = await fetch("/api/ai/guard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, level, chapters, description: extra || undefined }),
+        body: JSON.stringify({ topic }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "大纲生成失败");
-      setOutline(data);
-      await generateAll(data);
+      const guardData = await guardRes.json().catch(() => null);
+      if (guardData && guardData.relevant === false) {
+        setGuardPending({ topic, reason: guardData.reason ?? "" });
+        return;
+      }
+      await runGeneration();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "课程生成失败");
       setPhase("input");
     } finally {
       setGenerating(false);
     }
+  }
+
+  async function runGeneration() {
+    const res = await fetch("/api/ai/outline", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic, level, chapters, description: extra || undefined }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "大纲生成失败");
+    setOutline(data);
+    await generateAll(data);
   }
 
   async function generateAll(outlineData: CourseOutline) {
@@ -624,6 +652,48 @@ export default function HomePage() {
           >
             关闭
           </button>
+        </div>
+      )}
+
+      {guardPending && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-line bg-card p-6 shadow-xl">
+            <span className="text-3xl">🍳</span>
+            <h3 className="mt-3 font-serif text-xl font-bold text-ink">
+              这个主题似乎与编程学习无关
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-ink-soft">
+              「{guardPending.topic}」不太符合本产品的定位(生成编程/技术课程)。
+              {guardPending.reason ? `AI 判断:${guardPending.reason}` : ""}
+              课程质量可能不达预期,仍要继续生成吗?
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => setGuardPending(null)}
+                className="flex-1 rounded-xl border border-line py-2.5 text-sm font-medium text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
+              >
+                换个主题
+              </button>
+              <button
+                onClick={async () => {
+                  setGuardPending(null);
+                  setGenerating(true);
+                  setFormError("");
+                  try {
+                    await runGeneration();
+                  } catch (err) {
+                    setFormError(err instanceof Error ? err.message : "课程生成失败");
+                    setPhase("input");
+                  } finally {
+                    setGenerating(false);
+                  }
+                }}
+                className="flex-1 rounded-xl bg-ink py-2.5 text-sm font-semibold text-bg transition hover:bg-accent"
+              >
+                仍然生成
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 data/
+
+# electron 打包产物
+server/
+release/
