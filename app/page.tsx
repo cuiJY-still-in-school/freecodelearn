@@ -374,7 +374,7 @@ export default function HomePage() {
           </p>
           <label className="mt-4 block cursor-pointer text-center text-xs text-ink-soft transition hover:text-accent">
             <span className="inline-flex items-center gap-1">
-              {importing ? "导入中..." : "⬆ 导入课程 JSON"}
+              {importing ? "导入中..." : "⬆ 导入 .fcl 课程"}
             </span>
             <input
               type="file"
@@ -501,7 +501,7 @@ export default function HomePage() {
             <span className="text-4xl">📚</span>
             <p className="mt-3 font-serif text-lg font-bold">还没有课程</p>
             <p className="mt-1 text-sm text-ink-soft">
-              在上方输入主题一键生成,或导入已有的课程 JSON
+              在上方输入主题一键生成,或导入 .fcl 课程文件
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-3 text-xs">
               <a
@@ -511,7 +511,7 @@ export default function HomePage() {
                 去生成课程
               </a>
               <label className="cursor-pointer rounded-xl border border-line px-5 py-2.5 font-medium text-ink-soft transition hover:border-accent/50 hover:text-accent">
-                {importing ? "导入中..." : "导入课程 JSON"}
+                {importing ? "导入中..." : "导入 .fcl 课程"}
                 <input
                   type="file"
                   accept=".fcl,.json,application/json"
