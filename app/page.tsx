@@ -443,6 +443,28 @@ export default function HomePage() {
           <p className="mt-3 text-center text-xs text-ink-soft">
             输入主题即可,编程语言由 AI 自动判断 —— 生成完成后直接进入学习
           </p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            {[
+              "Python 爬虫入门",
+              "JavaScript 数组方法",
+              "Git 与 GitHub",
+              "SQL 数据库查询",
+              "Shell 脚本",
+              "HTML/CSS 网页制作",
+            ].map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => {
+                  setTopic(t);
+                  topicRef.current?.focus();
+                }}
+                className="rounded-full border border-line bg-bg-subtle px-3 py-1 text-xs text-ink-soft transition hover:border-accent/50 hover:text-accent"
+              >
+                {t}
+              </button>
+            ))}
+          </div>
           <label className="mt-4 block cursor-pointer text-center text-xs text-ink-soft transition hover:text-accent">
             <span className="inline-flex items-center gap-1">
               {importing ? "导入中..." : "⬆ 导入 .fcl 课程"}
@@ -535,16 +557,31 @@ export default function HomePage() {
       {/* 并行生成 */}
       {phase === "generating" && outline && (
         <div className="fade-up mx-auto max-w-3xl">
-          <h2 className="mb-1 font-serif text-2xl font-bold">
-            {allDone ? "课程生成完成" : "正在编写《" + outline.title + "》"}
-          </h2>
-          <p className="mb-6 text-sm text-ink-soft">
-            {allDone
-              ? "所有章节已完成,正在保存..."
-              : failedCount > 0
-                ? `${failedCount} 章生成失败,可单独重试`
-                : "各章节并行生成中,通常 1-2 分钟"}
-          </p>
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="mb-1 font-serif text-2xl font-bold">
+                {allDone ? "课程生成完成" : "正在编写《" + outline.title + "》"}
+              </h2>
+              <p className="text-sm text-ink-soft">
+                {allDone
+                  ? "所有章节已完成,正在保存..."
+                  : failedCount > 0
+                    ? `${failedCount} 章生成失败,可单独重试`
+                    : "各章节并行生成中,通常 1-2 分钟"}
+              </p>
+            </div>
+            {failedCount > 0 && (
+              <button
+                onClick={() => {
+                  setOutline(null);
+                  setPhase("input");
+                }}
+                className="rounded-xl border border-line px-4 py-2 text-xs font-medium text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
+              >
+                ← 放弃,返回修改
+              </button>
+            )}
+          </div>
 
           <div className="space-y-3">
             {outline.chapters.map((c, ci) => {
