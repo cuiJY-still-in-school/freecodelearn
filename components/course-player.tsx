@@ -126,6 +126,17 @@ export default function CoursePlayer({ course }: { course: Course }) {
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
   const isLast = currentId === (flat.length ? flat[flat.length - 1].step.id : "");
 
+  // 浏览器标签标题跟随当前步骤(延迟写入,避免被 Next.js hydration 的 metadata 应用覆盖)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      document.title = step ? `${step.title} · ${course.title}` : course.title;
+    }, 150);
+    return () => {
+      clearTimeout(t);
+      document.title = "FreeCodeLearn";
+    };
+  }, [step, course.title]);
+
   const markDone = useCallback(
     (id: string, status: "done" | "passed" | "correct"): boolean => {
       setProgress((prev) => {

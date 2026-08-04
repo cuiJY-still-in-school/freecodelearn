@@ -88,6 +88,7 @@ export default function ChallengeRunner({
   const [timeoutMsg, setTimeoutMsg] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [attempts, setAttempts] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settledRef = useRef(false);
@@ -141,6 +142,7 @@ export default function ChallengeRunner({
     setTimeoutMsg(false);
     setRunning(true);
     settledRef.current = false;
+    setAttempts((n) => n + 1);
 
     // 编辑区代码(用户实际改动部分):freeCodeCamp 的 code 变量,测试可用正则/字符串断言
     const editable = extractEditableCode(code);
@@ -316,6 +318,13 @@ ${HARNESS_SUFFIX}
                   <span className="ml-2 text-red/70">{f.error}</span>
                 </div>
               ))}
+              {result.failed.length > 0 && (
+                <div className="mt-2.5 text-xs text-ink-soft">
+                  {attempts === 1
+                    ? "别灰心,看看上面的失败提示再试一次 💪"
+                    : `已经尝试了 ${attempts} 次,每一次都离答案更近一步,加油!`}
+                </div>
+              )}
               {result.failed.length === 0 && (
                 <div className="flex items-center gap-1.5">
                   {result.passed.map((p) => (
@@ -325,6 +334,11 @@ ${HARNESS_SUFFIX}
                       title={p}
                     />
                   ))}
+                </div>
+              )}
+              {result.failed.length === 0 && attempts > 1 && (
+                <div className="mt-2.5 text-xs text-ink-soft">
+                  第 {attempts} 次尝试通过,坚持就是胜利 🎉
                 </div>
               )}
             </div>
