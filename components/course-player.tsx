@@ -91,6 +91,10 @@ export default function CoursePlayer({ course }: { course: Course }) {
   const [celebrating, setCelebrating] = useState(false);
   // 通过后跳转前提示(2 秒倒计时,可手动立即进入)
   const [passedFlash, setPassedFlash] = useState(false);
+  const [chapterFlash, setChapterFlash] = useState<{
+    title: string;
+    nextId: string;
+  } | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 键盘 ←/→ 切换步骤(编辑器中不触发)
@@ -123,14 +127,35 @@ export default function CoursePlayer({ course }: { course: Course }) {
   const isLast = currentId === (flat.length ? flat[flat.length - 1].step.id : "");
 
   const markDone = useCallback(
-    (id: string, status: "done" | "passed" | "correct") => {
+    (id: string, status: "done" | "passed" | "correct"): boolean => {
       setProgress((prev) => {
         const next = { ...prev, [id]: status };
         saveProgress(course.id, next);
         return next;
       });
+      // 章节完成检测:本步完成后,若所在章节全部完成且还有下一章 → 章节完成横幅
+      const chapter = course.chapters.find((c) =>
+        c.steps.some((s) => s.id === id)
+      );
+      if (!chapter) return false;
+      const allDone = chapter.steps.every(
+        (s) => progress[s.id] || s.id === id
+      );
+      if (!allDone) return false;
+      const ci = course.chapters.indexOf(chapter);
+      const nextChapter = course.chapters[ci + 1];
+      const firstOfNext = nextChapter?.steps[0];
+      if (!firstOfNext) return false;
+      setPassedFlash(false);
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      setChapterFlash({ title: nextChapter.title, nextId: firstOfNext.id });
+      flashTimerRef.current = setTimeout(() => {
+        setChapterFlash(null);
+        goTo(firstOfNext.id);
+      }, 2500);
+      return true;
     },
-    [course.id]
+    [course, progress]
   );
 
   const unmark = useCallback(
@@ -148,8 +173,17 @@ export default function CoursePlayer({ course }: { course: Course }) {
   function goTo(id: string) {
     setCurrentId(id);
     setPassedFlash(false);
+    setChapterFlash(null);
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function jumpChapter() {
+    if (!chapterFlash) return;
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    const { nextId } = chapterFlash;
+    setChapterFlash(null);
+    goTo(nextId);
   }
 
   // 通过后:标记完成 → 显示成功横幅 → 2 秒后自动进入下一步(可手动立即进入)
@@ -298,6 +332,21 @@ export default function CoursePlayer({ course }: { course: Course }) {
               </button>
             </div>
           )}
+
+          {/* 章节完成横幅 */}
+          {chapterFlash && (
+            <div className="fade-up mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent-soft px-5 py-4">
+              <span className="text-sm font-semibold text-accent">
+                🎉 本章完成!即将进入下一章《{chapterFlash.title}》
+              </span>
+              <button
+                onClick={jumpChapter}
+                className="rounded-xl bg-accent px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                进入下一章 →
+              </button>
+            </div>
+          )}
           <h1 className="mb-8 font-serif text-3xl font-bold tracking-tight">
             {step.title}
           </h1>
@@ -323,12 +372,13 @@ export default function CoursePlayer({ course }: { course: Course }) {
               {!step.tests && (
                 <button
                   onClick={() => {
-                    markDone(step.id, "done");
-                    if (next) window.setTimeout(() => goTo(next), 600);
+                    const chapterDone = markDone(step.id, "done");
+                    if (next && !chapterDone)
+                      window.setTimeout(() => goTo(next), 700);
                   }}
                   className="mt-4 rounded-xl border border-line px-4 py-2 text-sm text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
                 >
-                  标记为已完成
+                  {next ? "完成本节,继续 →" : "标记为已完成"}
                 </button>
               )}
             </div>
@@ -342,19 +392,27 @@ export default function CoursePlayer({ course }: { course: Course }) {
               />
             ) : (
               <button
-                onClick={() => markDone(step.id, "done")}
+                onClick={() => {
+                  const chapterDone = markDone(step.id, "done");
+                  if (next && !chapterDone)
+                    window.setTimeout(() => goTo(next), 700);
+                }}
                 className="rounded-xl border border-line px-4 py-2 text-sm text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
               >
-                标记为已完成
+                {next ? "完成本节,继续 →" : "标记为已完成"}
               </button>
             ))}
 
           {step.type === "lesson" && (
             <button
-              onClick={() => markDone(step.id, "done")}
+              onClick={() => {
+                const chapterDone = markDone(step.id, "done");
+                if (next && !chapterDone)
+                  window.setTimeout(() => goTo(next), 700);
+              }}
               className="rounded-xl border border-line px-4 py-2 text-sm text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
             >
-              标记为已完成
+              {next ? "完成本节,继续 →" : "标记为已完成"}
             </button>
           )}
 

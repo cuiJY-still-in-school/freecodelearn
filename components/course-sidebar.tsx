@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import type { Course } from "@/lib/types";
 import type { ProgressMap } from "@/lib/progress";
@@ -27,6 +28,13 @@ export default function CourseSidebar({
   onClearProgress,
   className,
 }: Props) {
+  const activeRef = useRef<HTMLButtonElement>(null);
+
+  // 当前步骤跟随:切换步骤时把激活项滚动到侧边栏可见区域
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: "nearest" });
+  }, [currentStepId]);
+
   return (
     <aside
       className={`sticky top-14 h-[calc(100vh-3.5rem)] w-72 shrink-0 overflow-y-auto border-r border-line bg-card/60 p-5 ${
@@ -67,6 +75,7 @@ export default function CourseSidebar({
                 return (
                   <button
                     key={step.id}
+                    ref={active ? activeRef : undefined}
                     onClick={() => onNavigate(step.id)}
                     className={`mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[13px] transition ${
                       active
