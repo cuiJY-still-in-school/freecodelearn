@@ -277,6 +277,8 @@ export default function CoursePlayer({ course }: { course: Course }) {
                 solution={step.solution}
                 html={step.html}
                 language={step.language}
+                seedBefore={step.seedBefore}
+                seedAfter={step.seedAfter}
                 onPassed={() => {
                   markDone(step.id, "passed");
                   if (next) window.setTimeout(() => goTo(next), 600);
