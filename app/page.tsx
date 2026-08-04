@@ -54,7 +54,7 @@ export default function HomePage() {
   const [formError, setFormError] = useState("");
 
   // 流程
-  const [phase, setPhase] = useState<"input" | "generating" | "done">("input");
+  const [phase, setPhase] = useState<"input" | "preview" | "generating" | "done">("input");
   const [outline, setOutline] = useState<CourseOutline | null>(null);
   const [generating, setGenerating] = useState(false);
   const [chapterStates, setChapterStates] = useState<ChapterState[]>([]);
@@ -145,7 +145,19 @@ export default function HomePage() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "大纲生成失败");
     setOutline(data);
-    await generateAll(data);
+    // 进入大纲确认:先看 AI 理解的主题与章节结构,确认后再生成全部章节
+    setPhase("preview");
+  }
+
+  async function regenerateOutline() {
+    setOutline(null);
+    setFormError("");
+    await runGeneration();
+  }
+
+  async function confirmOutline() {
+    if (!outline) return;
+    await generateAll(outline);
   }
 
   async function generateAll(outlineData: CourseOutline) {
@@ -448,6 +460,76 @@ export default function HomePage() {
             />
           </label>
         </form>
+      )}
+
+      {/* 大纲确认 */}
+      {phase === "preview" && outline && (
+        <div className="fade-up mx-auto max-w-3xl">
+          <div className="rounded-2xl border border-line bg-card p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium tracking-wide text-accent">
+                  大纲已生成 · 请确认
+                </p>
+                <h2 className="mt-1 font-serif text-2xl font-bold">{outline.title}</h2>
+                <p className="mt-1 text-sm text-ink-soft">{outline.description}</p>
+              </div>
+              <span className="shrink-0 rounded-full border border-line bg-bg-subtle px-3 py-1 text-xs text-ink-soft">
+                {outline.language} · {outline.chapters.length} 章 · 约{" "}
+                {outline.estimatedMinutes} 分钟
+              </span>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              {outline.chapters.map((c, ci) => (
+                <div key={ci} className="rounded-xl border border-line bg-bg-subtle/50 p-4">
+                  <h3 className="text-sm font-bold text-ink">
+                    {ci + 1}. {c.title}
+                  </h3>
+                  {c.description && (
+                    <p className="mt-0.5 text-xs text-ink-soft">{c.description}</p>
+                  )}
+                  <ul className="mt-2.5 space-y-1">
+                    {c.steps.map((s, si) => (
+                      <li key={si} className="flex items-center gap-2 text-xs text-ink-soft">
+                        <span
+                          className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] font-bold ${
+                            s.type === "challenge"
+                              ? "bg-purple-100 text-purple-700"
+                              : s.type === "quiz"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {s.type === "challenge" ? "⌘" : s.type === "quiz" ? "✓" : "📖"}
+                        </span>
+                        <span className="truncate">{s.title}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                onClick={confirmOutline}
+                className="flex-1 rounded-xl bg-ink py-3 text-sm font-semibold text-bg transition hover:bg-accent"
+              >
+                确认大纲,开始生成课程 →
+              </button>
+              <button
+                onClick={regenerateOutline}
+                className="rounded-xl border border-line px-5 py-3 text-sm font-medium text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
+              >
+                ↻ 换个大纲
+              </button>
+            </div>
+            <p className="mt-3 text-center text-xs text-ink-soft">
+              确认后将并行生成全部章节(通常 1-2 分钟),中途可对失败章节单独重试
+            </p>
+          </div>
+        </div>
       )}
 
       {/* 并行生成 */}
