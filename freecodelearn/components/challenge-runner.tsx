@@ -376,20 +376,34 @@ ${HARNESS_SUFFIX}
               <pre className="overflow-x-auto rounded-xl bg-[#1f1e1d] p-4 font-mono text-xs text-[#e8e6e1]">
                 {solution}
               </pre>
-              <button
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(solution);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1500);
-                  } catch {
-                    setCopied(false);
-                  }
-                }}
-                className="absolute right-2 top-2 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] text-white/70 transition hover:bg-white/15 hover:text-white"
-              >
-                {copied ? "✓ 已复制" : "复制"}
-              </button>
+              <div className="absolute right-2 top-2 flex gap-1.5">
+                <button
+                  onClick={() => {
+                    setCode(solution);
+                    setResult(null);
+                    setTimeoutMsg(false);
+                    setShowSolution(false);
+                  }}
+                  title="把答案填入编辑器,自己运行体会"
+                  className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] text-white/70 transition hover:bg-white/15 hover:text-white"
+                >
+                  填入编辑器
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(solution);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1500);
+                    } catch {
+                      setCopied(false);
+                    }
+                  }}
+                  className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] text-white/70 transition hover:bg-white/15 hover:text-white"
+                >
+                  {copied ? "✓ 已复制" : "复制"}
+                </button>
+              </div>
             </div>
           ) : (
             <button

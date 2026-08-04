@@ -734,9 +734,19 @@ export default function HomePage() {
                   </span>
                 </div>
                 <div className="mb-3 flex items-center gap-2">
-                  <span className="rounded-full border border-line bg-bg-subtle px-2.5 py-0.5 text-xs text-ink-soft">
-                    {LEVEL_LABEL[c.level]}
-                  </span>
+                  {pct >= 100 ? (
+                    <span className="rounded-full border border-green/30 bg-green-soft px-2.5 py-0.5 text-xs font-medium text-green">
+                      ✓ 已完成
+                    </span>
+                  ) : pct > 0 ? (
+                    <span className="rounded-full border border-accent/30 bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent">
+                      继续学习
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-line bg-bg-subtle px-2.5 py-0.5 text-xs text-ink-soft">
+                      {LEVEL_LABEL[c.level]}
+                    </span>
+                  )}
                   <span className="text-xs text-ink-soft">
                     {c.chapterCount} 章 · {c.stepCount} 步
                   </span>
