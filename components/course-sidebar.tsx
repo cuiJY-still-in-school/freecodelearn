@@ -38,6 +38,7 @@ export default function CourseSidebar({
 
   // 当前步骤所在章节自动展开
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 步骤切换时自动展开所在章节,函数式更新无级联
     setCollapsed((prev) => {
       const chapter = course.chapters.find((c) =>
         c.steps.some((s) => s.id === currentStepId)

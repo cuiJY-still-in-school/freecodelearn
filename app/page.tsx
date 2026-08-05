@@ -14,12 +14,6 @@ const LEVEL_LABEL: Record<string, string> = {
   advanced: "高级",
 };
 
-const STEP_TYPE_LABEL: Record<string, { label: string; cls: string; icon: string }> = {
-  lesson: { label: "讲解", cls: "bg-blue-50 text-blue-700 border-blue-200", icon: "📖" },
-  challenge: { label: "挑战", cls: "bg-purple-50 text-purple-700 border-purple-200", icon: "⌘" },
-  quiz: { label: "测验", cls: "bg-amber-50 text-amber-700 border-amber-200", icon: "✓" },
-};
-
 const COVER_GRADIENTS = [
   "from-[#f6e7d9] to-[#ecd9c6]",
   "from-[#f0e4d2] to-[#e8cfb8]",
@@ -125,6 +119,7 @@ export default function HomePage() {
       .catch(() => {});
     // 配置成功回跳:显示成功横幅、聚焦输入框、清理 URL
     if (window.location.search.includes("configured=1")) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 一次性 URL 回跳提示,非级联更新
       setConfiguredFlash(true);
       window.history.replaceState({}, "", "/");
       window.setTimeout(() => topicRef.current?.focus(), 600);

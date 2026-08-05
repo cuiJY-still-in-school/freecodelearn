@@ -87,6 +87,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
   // 客户端挂载后按本地进度定位到第一个未完成步骤(SSR 阶段统一渲染第一步骤,避免 hydration mismatch)
   useEffect(() => {
     const saved = loadProgress(course.id);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 挂载后一次性从 localStorage 初始化,SSR 阶段无法访问
     setProgress(saved);
     const firstUndone = flat.find((f) => !saved[f.step.id]);
     if (firstUndone) setCurrentId(firstUndone.step.id);
