@@ -75,15 +75,6 @@ npm run dev
 
 保存后即生效,当前生效的配置会显示在设置页顶部(仅展示,不回显密钥)。
 
-### DeepSeek 配置
-
-到 <https://platform.deepseek.com> 注册并创建 API Key,设置页填入:
-
-```
-Base URL: https://api.deepseek.com/v1
-模型:     deepseek-v4-flash
-```
-
 也可用环境变量 `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL`(优先级低于网页设置)。
 
 ## 更新
