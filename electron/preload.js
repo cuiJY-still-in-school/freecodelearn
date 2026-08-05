@@ -2,5 +2,5 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("fclTerminal", {
-  exec: (cmd) => ipcRenderer.invoke("fcl-exec", cmd),
+  exec: (cmd, extra) => ipcRenderer.invoke("fcl-exec", cmd, extra),
 });

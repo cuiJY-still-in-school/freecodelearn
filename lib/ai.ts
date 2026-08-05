@@ -41,6 +41,9 @@ export interface CourseOutline {
   referenceDoc?: string;
   /** 联网检索到的资料摘要(透传给章节生成) */
   researchNotes?: string;
+  /** 终端练习白名单扩展/禁用(仅命令行类课程,AI 按课程需要声明) */
+  allowedCommands?: string[];
+  blockedCommands?: string[];
 }
 
 const SYSTEM_PROMPT = `你是课程设计专家,擅长设计 freeCodeCamp 风格的循序渐进编程课程。`;
@@ -55,6 +58,8 @@ JSON 结构:
   "level": "beginner|intermediate|advanced",
   "language": "根据主题推断的编程语言或工具语言(JavaScript、Python、HTML/CSS、SQL、Shell、Go 等;命令行/工具类主题必须用其命令语言如 Shell/Git,不要写「无代码」;仅纯概念主题才可用「无代码」)",
   "estimatedMinutes": 预计学习总分钟数,
+  "allowedCommands": ["命令行类课程所需的额外命令名,如 mysql、docker、curl;无命令行练习或不需要额外命令时可省略或为空"],
+  "blockedCommands": ["课程声明禁用的命令名(即使默认允许也禁用),如用户明确要规避的 curl;默认可省略"],
   "chapters": [
     {
       "title": "章节标题",
@@ -76,6 +81,7 @@ JSON 结构:
 7. 每章 quiz 考察「理解」而非「记忆」:用新的小例子检验概念是否真懂(如把本章讲的语法换个场景提问)
 8. 章节数由你根据「学习目标」与主题复杂度自定(3-10 章):目标宏大、内容面广则 5-10 章;入门小目标则 3-4 章;不注水,每章都要有明确的构建成果
 9. 用户提供「学习目标」时,课程围绕目标设计:学完能做什么、覆盖哪些关键技能;目标决定章节数与步骤
+10. 命令行/Shell 类课程(如 Git、Docker、MySQL):allowedCommands 填写练习中需要真实执行、但不在系统默认安全白名单里的命令(如 mysql、docker、psql、npx);默认白名单已有 git/python/node/npm/ls/cat/mkdir/cd/echo/pwd/touch/grep/find/head/tail/cp/clear/whoami/uname/tree/pip,不用重复列出;blockedCommands 用于禁用默认允许但你判断不适合本课程练习的命令(如 curl、cp),没有则省略;非命令行课程两者都省略
 
 参考资料(必须遵守):
 - 如果提供了「参考文档」:课程内容必须取材自该文档(文档的技术栈、术语、示例、工作流),大纲先覆盖文档核心内容再扩展
@@ -478,7 +484,15 @@ export async function generateOutline(input: GenerateInput): Promise<CourseOutli
     chapters,
     referenceDoc: refDoc || undefined,
     researchNotes: researchNotes || undefined,
+    allowedCommands: strArray(raw.allowedCommands),
+    blockedCommands: strArray(raw.blockedCommands),
   };
+}
+
+/** 从 AI 输出中提取字符串数组字段 */
+function strArray(v: unknown): string[] | undefined {
+  const arr = Array.isArray(v) ? v.map((s) => String(s).trim()).filter(Boolean) : [];
+  return arr.length > 0 ? arr : undefined;
 }
 
 /* ---------- 单章内容生成 ---------- */
@@ -767,6 +781,8 @@ export async function assembleCourse(
         steps,
       };
     }),
+    allowedCommands: outline.allowedCommands,
+    blockedCommands: outline.blockedCommands,
   };
   await saveCourse(course);
   return course;

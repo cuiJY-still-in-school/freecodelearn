@@ -24,6 +24,9 @@ interface Props {
   language?: string;
   seedBefore?: string;
   seedAfter?: string;
+  /** 课程声明的终端白名单扩展/禁用 */
+  allowedCommands?: string[];
+  blockedCommands?: string[];
   onPassed?: () => void;
 }
 
@@ -76,6 +79,8 @@ export default function ChallengeRunner({
   language,
   seedBefore,
   seedAfter,
+  allowedCommands,
+  blockedCommands,
   onPassed,
 }: Props) {
   const initial = !seedBefore && !seedAfter
@@ -166,16 +171,27 @@ export default function ChallengeRunner({
     // 命令行/终端类挑战(桌面版):把用户输入的命令真实执行,回显终端输出
     let termOut = "";
     if (isTerminalLang && typeof window !== "undefined") {
-      const term = (window as unknown as { fclTerminal?: { exec(c: string): Promise<{ stdout?: string; stderr?: string; error?: string; code?: number }> } }).fclTerminal;
+      const term = (window as unknown as {
+        fclTerminal?: {
+          exec(
+            c: string,
+            extra?: { allowed?: string[]; blocked?: string[] }
+          ): Promise<{ stdout?: string; stderr?: string; error?: string; code?: number }>;
+        };
+      }).fclTerminal;
       if (term) {
         const cmds = editable
           .split("\n")
           .map((s) => s.trim())
           .filter(Boolean);
         const lines: string[] = [];
+        const extra = {
+          allowed: allowedCommands ?? [],
+          blocked: blockedCommands ?? [],
+        };
         for (const c of cmds) {
           lines.push(`$ ${c}`);
-          const r = await term.exec(c);
+          const r = await term.exec(c, extra);
           if (r?.stdout?.trim()) lines.push(r.stdout.replace(/\n$/, ""));
           if (r?.stderr) lines.push(r.stderr);
           if (r?.error) lines.push(r.error);

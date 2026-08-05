@@ -155,17 +155,31 @@ function createWindow(url) {
 }
 
 // 终端练习:白名单内命令在本机执行,返回真实输出(15s 超时,工作目录为用户数据目录)
-ipcMain.handle("fcl-exec", async (_event, cmdRaw) => {
+// 课程可声明额外允许的命令(allowedCommands)与禁用的命令(blockedCommands)
+ipcMain.handle("fcl-exec", async (_event, cmdRaw, extra) => {
   const cmd = String(cmdRaw ?? "").trim();
   if (!cmd) return { ok: false, error: "空命令" };
-  // 多行/&& 拼接的命令逐段校验,每段首词都必须在白名单内
+  const allowed = new Set(ALLOWED_TERMINAL_CMDS);
+  const extraAllowed = Array.isArray(extra?.allowed)
+    ? extra.allowed.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+  const blocked = new Set(
+    Array.isArray(extra?.blocked)
+      ? extra.blocked.map((s) => String(s).trim()).filter(Boolean)
+      : []
+  );
+  for (const c of extraAllowed) allowed.add(c.replace(/^.*[\\/]/, ""));
+  // 多行/&& 拼接的命令逐段校验,每段首词必须:课程未禁用,且在(默认 ∪ 课程扩展)白名单内
   const segments = cmd
     .split(/\n|&&/i)
     .map((s) => s.trim())
     .filter(Boolean);
   for (const seg of segments) {
     const first = seg.split(/\s+/)[0].replace(/^.*[\\/]/, "");
-    if (!ALLOWED_TERMINAL_CMDS.has(first)) {
+    if (blocked.has(first)) {
+      return { ok: false, error: `命令「${first}」已被本课程禁用` };
+    }
+    if (!allowed.has(first)) {
       return { ok: false, error: `命令「${first}」不在允许列表中(为安全起见仅支持常见练习命令)` };
     }
   }

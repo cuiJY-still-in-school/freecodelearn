@@ -69,6 +69,10 @@ export interface Course {
   estimatedMinutes: number;
   createdAt: string;
   chapters: Chapter[];
+  /** 终端练习白名单扩展(课程声明的额外命令,AI 按课程需要生成) */
+  allowedCommands?: string[];
+  /** 终端练习白名单禁用(课程声明的不允许执行命令) */
+  blockedCommands?: string[];
 }
 
 export function flattenSteps(course: Course): { chapter: Chapter; step: Step }[] {
