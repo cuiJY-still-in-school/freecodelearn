@@ -6,7 +6,7 @@
 
 ## 功能
 
-- **AI 生成课程**:支持任何 OpenAI 兼容协议的服务(OpenAI / DeepSeek / 通义 / Ollama 等)
+- **AI 生成课程**:支持 OpenAI 与 Anthropic 兼容协议的服务(OpenAI / DeepSeek / 通义 / Ollama / Claude 等)
 - **定制化生成**:
   - 上传参考文档(txt / md / 代码文件),AI 取材于你的文档生成课程(术语、示例、工作流保持一致)
   - 选择已有课程作为参考,新课程模仿其项目式结构与步骤粒度
@@ -24,7 +24,7 @@
   - 进度跟踪(localStorage,自动续学上次未完成步骤;首页卡片显示进度与「继续学习」)
   - 追加章节:课程学习页面可直接让 AI 追加新章节
 - **课程导入导出**:导出 .fcl 文件(含课程与学习进度),随时导入恢复
-- 课程数据存于 `data/courses/`(JSON 文件,gitignore)
+- 课程数据存于 `data/courses/`(.fcl 文件,gitignore)
 
 ## 安装(桌面版)
 
