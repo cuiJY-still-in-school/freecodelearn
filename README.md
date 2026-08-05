@@ -6,7 +6,7 @@
 
 ## 功能
 
-- **AI 生成课程**:支持任何 OpenAI 兼容协议的服务(OpenAI / DeepSeek / 通义 / Ollama / OpenCode Zen 免费模型等)
+- **AI 生成课程**:支持任何 OpenAI 兼容协议的服务(OpenAI / DeepSeek / 通义 / Ollama 等)
 - **定制化生成**:
   - 上传参考文档(txt / md / 代码文件),AI 取材于你的文档生成课程(术语、示例、工作流保持一致)
   - 选择已有课程作为参考,新课程模仿其项目式结构与步骤粒度
@@ -67,13 +67,22 @@ npm run dev
 
 | 字段 | 说明 | 示例 |
 | --- | --- | --- |
-| Provider | 服务商名称(仅作显示) | `OpenCode Zen` |
+| Provider | 服务商名称(仅作显示) | `DeepSeek` |
 | parseMethod | 协议格式,默认 `openai`;Anthropic 官方 API 选 `anthropic` | `openai` |
 | Base URL | API 地址 | `https://api.openai.com/v1` |
 | API Key | 密钥 | `sk-...` |
 | 模型 | 模型 ID | `gpt-4o` |
 
 保存后即生效,当前生效的配置会显示在设置页顶部(仅展示,不回显密钥)。
+
+### 默认推荐:DeepSeek
+
+到 <https://platform.deepseek.com> 注册并创建 API Key,设置页填入:
+
+```
+Base URL: https://api.deepseek.com/v1
+模型:     deepseek-v4-flash
+```
 
 也可用环境变量 `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL`(优先级低于网页设置)。
 

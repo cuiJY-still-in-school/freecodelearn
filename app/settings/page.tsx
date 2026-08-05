@@ -114,7 +114,7 @@ export default function SettingsPage() {
         <input
           value={provider}
           onChange={(e) => setProvider(e.target.value)}
-          placeholder="OpenCode Zen / OpenAI / Anthropic / 自定义..."
+          placeholder="DeepSeek / OpenAI / Anthropic / 自定义..."
           className="mb-4 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
         <label className="mb-1.5 block text-sm font-medium text-ink">
