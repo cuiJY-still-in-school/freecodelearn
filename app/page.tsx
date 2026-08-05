@@ -60,23 +60,13 @@ export default function HomePage() {
   const [chapterStates, setChapterStates] = useState<ChapterState[]>([]);
   const [researchNote, setResearchNote] = useState("");
 
-  // 联网检索阶段的轮转文案
-  const RESEARCH_MSGS = [
-    "正在分析主题与知识点...",
-    "正在制定资料查询计划...",
-    "正在联网查找资料...",
-    "正在整理资料要点...",
-  ];
-  const [researchMsgIdx, setResearchMsgIdx] = useState(0);
-  useEffect(() => {
-    if (phase !== "researching") return;
-    const t = window.setInterval(
-      () => setResearchMsgIdx((i) => (i + 1) % RESEARCH_MSGS.length),
-      6000
-    );
-    return () => window.clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  // 联网检索阶段的真实进度:计划 → 逐词检索
+  const [researchState, setResearchState] = useState<{
+    plan: "running" | "done" | "failed";
+    queries: string[];
+    done: number;
+    current: string;
+  }>({ plan: "running", queries: [], done: 0, current: "" });
 
   // 提示
   const [notice, setNotice] = useState("");
@@ -157,12 +147,14 @@ export default function HomePage() {
   }
 
   async function runGeneration() {
-    // ① 联网检索资料(AI 制定查询计划 + Bing 抓取,失败则跳过,不阻塞)
+    // ① 联网检索资料:先让 AI 制定查询计划,再逐词抓取(失败则跳过,不阻塞)
     setPhase("researching");
     setResearchNote("");
+    setResearchState({ plan: "running", queries: [], done: 0, current: "" });
     let notes = "";
+    let plan = { queries: [] as string[], sites: [] as string[] };
     try {
-      const rr = await fetch("/api/ai/research", {
+      const pr = await fetch("/api/ai/research/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -170,9 +162,43 @@ export default function HomePage() {
           goal: goal.trim() || undefined,
         }),
       });
-      const rd = await rr.json().catch(() => null);
-      notes = rd?.notes ?? "";
+      plan = await pr.json().catch(() => plan);
+      if (!Array.isArray(plan.queries) || plan.queries.length === 0) {
+        throw new Error("empty plan");
+      }
+      setResearchState({
+        plan: "done",
+        queries: plan.queries,
+        done: 0,
+        current: "",
+      });
+      const sections: string[] = [];
+      for (let i = 0; i < plan.queries.length; i++) {
+        const q = plan.queries[i];
+        setResearchState({
+          plan: "done",
+          queries: plan.queries,
+          done: i,
+          current: q,
+        });
+        const qr = await fetch("/api/ai/research/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ q, sites: plan.sites }),
+        });
+        const qd = await qr.json().catch(() => null);
+        const text = (qd?.text ?? "").toString().trim();
+        if (text) sections.push(`【${q}】\n${text}`);
+        setResearchState({
+          plan: "done",
+          queries: plan.queries,
+          done: i + 1,
+          current: "",
+        });
+      }
+      notes = sections.join("\n\n").slice(0, 30000);
     } catch {
+      setResearchState((s) => ({ ...s, plan: "failed" }));
       // 检索失败:继续走纯 AI 生成
     }
     setResearchNote(notes);
@@ -631,35 +657,67 @@ export default function HomePage() {
               <h3 className="font-serif text-lg font-bold text-ink">
                 正在准备《{topic}》的资料
               </h3>
-              <p className="mt-1 text-sm text-ink-soft">{RESEARCH_MSGS[researchMsgIdx]}</p>
+              <p className="mt-1 text-sm text-ink-soft">
+                {researchState.plan === "running"
+                  ? "正在分析主题,制定资料查询计划..."
+                  : researchState.plan === "failed"
+                    ? "联网检索不可用,将继续纯 AI 生成"
+                    : researchState.current
+                      ? `正在联网检索:${researchState.current}`
+                      : `检索完成,共 ${researchState.queries.length} 条知识点`}
+              </p>
               <p className="mt-2 text-xs text-ink-soft/70">
                 AI 会先联网查找相关知识点与最佳实践,再据此设计课程,内容更准确、不过时
               </p>
             </div>
           </div>
           <div className="mt-6 space-y-2">
-            {RESEARCH_MSGS.map((m, i) => (
-              <div key={m} className="flex items-center gap-2 text-xs">
-                <span
-                  className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${
-                    i < researchMsgIdx
+            <div className="flex items-center gap-2 text-xs">
+              <span
+                className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${
+                  researchState.plan === "failed"
+                    ? "bg-red-soft text-red"
+                    : researchState.plan === "done"
                       ? "bg-green-soft text-green"
-                      : i === researchMsgIdx
-                        ? "bg-accent-soft text-accent"
-                        : "bg-bg-subtle text-ink-soft/50"
-                  }`}
-                >
-                  {i < researchMsgIdx ? "✓" : i === researchMsgIdx ? "●" : "○"}
+                      : "bg-accent-soft text-accent"
+                }`}
+              >
+                {researchState.plan === "failed" ? "✗" : researchState.plan === "done" ? "✓" : "●"}
+              </span>
+              <span className="text-ink">制定查询计划</span>
+              {researchState.plan === "done" && researchState.queries.length > 0 && (
+                <span className="ml-auto text-ink-soft/60">
+                  {researchState.done}/{researchState.queries.length}
                 </span>
-                <span
-                  className={
-                    i === researchMsgIdx ? "text-ink" : i < researchMsgIdx ? "text-ink-soft" : "text-ink-soft/50"
-                  }
-                >
-                  {m}
-                </span>
-              </div>
-            ))}
+              )}
+            </div>
+            {researchState.plan === "done" &&
+              researchState.queries.map((q, i) => (
+                <div key={q} className="flex items-center gap-2 text-xs">
+                  <span
+                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${
+                      i < researchState.done
+                        ? "bg-green-soft text-green"
+                        : i === researchState.done
+                          ? "bg-accent-soft text-accent"
+                          : "bg-bg-subtle text-ink-soft/50"
+                    }`}
+                  >
+                    {i < researchState.done ? "✓" : i === researchState.done ? "●" : "○"}
+                  </span>
+                  <span
+                    className={`truncate ${
+                      i < researchState.done
+                        ? "text-ink-soft"
+                        : i === researchState.done
+                          ? "text-ink"
+                          : "text-ink-soft/50"
+                    }`}
+                  >
+                    {q}
+                  </span>
+                </div>
+              ))}
           </div>
         </div>
       )}

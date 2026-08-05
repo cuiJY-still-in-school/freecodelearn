@@ -9,7 +9,7 @@ export interface GenerateInput {
   description?: string;
   /** 学习目标:想达到什么水平,AI 据此决定章节数 */
   goal?: string;
-  /** 联网检索到的资料摘要(由 researchTopic 生成) */
+/** 联网检索到的资料摘要(researchPlan + researchQuery 组合生成) */
   researchNotes?: string;
   /** 用户上传的参考文档全文(用于定制课程内容) */
   referenceDoc?: string;
@@ -357,10 +357,10 @@ async function bingSearch(query: string, count = 3): Promise<string> {
 }
 
 /** 在课程准备阶段联网检索资料:AI 制定查询计划与目标网站 → 优先站内检索、回退通用搜索 → 汇总摘要(失败返回空,不阻塞) */
-export async function researchTopic(
+export async function researchPlan(
   topic: string,
   goal?: string
-): Promise<string> {
+): Promise<{ queries: string[]; sites: string[] }> {
   try {
     const content = await chat(
       `${systemContext()}\n\n${RESEARCH_PLAN_TASK}\n${topic}${
@@ -378,23 +378,24 @@ export async function researchTopic(
       .map((s) => String(s).trim().replace(/^https?:\/\//, ""))
       .filter((s) => /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(s))
       .slice(0, 4);
-    if (queries.length === 0) return "";
-    const sections: string[] = [];
-    for (const q of queries) {
-      let results = "";
-      // ① 优先从 AI 指定的网站站内检索(可多站依次尝试,取第一个有结果的)
-      for (const site of sites) {
-        const r = await bingSearch(`site:${site} ${q}`);
-        if (r) {
-          results = r;
-          break;
-        }
-      }
-      // ② 站内无结果 → 回退通用搜索
-      if (!results) results = await bingSearch(q);
-      if (results) sections.push(`【${q}】\n${results}`);
+    return { queries, sites };
+  } catch {
+    return { queries: [], sites: [] };
+  }
+}
+
+export async function researchQuery(
+  q: string,
+  sites: string[]
+): Promise<string> {
+  try {
+    // ① 优先从 AI 指定的网站站内检索(可多站依次尝试,取第一个有结果的)
+    for (const site of sites) {
+      const r = await bingSearch(`site:${site} ${q}`);
+      if (r) return r;
     }
-    return sections.join("\n\n").slice(0, 30000);
+    // ② 站内无结果 → 回退通用搜索
+    return (await bingSearch(q)) ?? "";
   } catch {
     return "";
   }
