@@ -2,13 +2,15 @@
 
 输入一个主题,AI 几分钟生成一门 freeCodeCamp 风格的编程课程,即刻开始学习。
 
+仓库:<https://github.com/cuiJY-still-in-school/freecodelearn>(发布版安装包见 Releases)
+
 ## 功能
 
 - **AI 生成课程**:支持任何 OpenAI 兼容协议的服务(OpenAI / DeepSeek / 通义 / Ollama / OpenCode Zen 免费模型等)
 - **定制化生成**:
   - 上传参考文档(txt / md / 代码文件),AI 取材于你的文档生成课程(术语、示例、工作流保持一致)
   - 选择已有课程作为参考,新课程模仿其项目式结构与步骤粒度
-  - 补充说明、难度、章节数自由指定
+  - 补充说明、难度、学习目标自由指定(章节数由 AI 按目标复杂度自定)
 - **大纲确认步骤**:AI 先产出完整课程大纲(标题/章节/步骤/时长),确认或「换个大纲」后再开始生成
 - **主题把关**:无关主题(如烹饪)会先被拦截提示,可选择「仍然生成」或「换个主题」
 - **freeCodeCamp 式学习体验**:
@@ -32,15 +34,46 @@ npm run dev
 # 打开 http://localhost:3000
 ```
 
+## 安装(桌面版)
+
+发布版提供三个平台的安装包(GitHub Releases),无需 Node.js 环境:
+
+| 平台 | 文件 | 安装方法 |
+| --- | --- | --- |
+| Linux | `FreeCodeLearn-1.0.0.AppImage` | 见下方 A 或 B |
+| Linux | `freecodelearn_1.0.0_amd64.deb` | `sudo apt install ./freecodelearn_1.0.0_amd64.deb` |
+| Windows | `FreeCodeLearn Setup 1.0.0.exe` | 双击运行,按向导安装 |
+
+**Linux AppImage 两种运行方式:**
+
+- A. 直接运行(需要 FUSE 支持):
+
+  ```bash
+  chmod +x FreeCodeLearn-1.0.0.AppImage
+  ./FreeCodeLearn-1.0.0.AppImage
+  ```
+
+- B. 系统没有 FUSE 时,用解包模式运行:
+
+  ```bash
+  ./FreeCodeLearn-1.0.0.AppImage --appimage-extract-and-run
+  ```
+
+**数据目录:** 课程与设置保存在 `~/.config/freecodelearn/data`(桌面版内嵌服务器自带存储,不依赖任何外部服务)。可用环境变量 `FCL_DATA_DIR` 覆盖目录。
+
 ## 配置 AI 服务
 
-打开「设置」页填入三项:
+打开「设置」页填入以下字段:
 
-| 字段 | 示例 |
-| --- | --- |
-| Base URL | `https://api.openai.com/v1` |
-| API Key | `sk-...` |
-| 模型 | `gpt-4o` |
+| 字段 | 说明 | 示例 |
+| --- | --- | --- |
+| Provider | 服务商名称(仅作显示) | `OpenCode Zen` |
+| parseMethod | 协议格式,默认 `openai`;Anthropic 官方 API 选 `anthropic` | `openai` |
+| Base URL | API 地址 | `https://api.openai.com/v1` |
+| API Key | 密钥 | `sk-...` |
+| 模型 | 模型 ID | `gpt-4o` |
+
+保存后即生效,当前生效的配置会显示在设置页顶部(仅展示,不回显密钥)。
 
 ### 免费方案:OpenCode Zen(无需信用卡)
 
@@ -56,11 +89,17 @@ Base URL: https://opencode.ai/zen/v1
 
 也可用环境变量 `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL`(优先级低于网页设置)。
 
+## 更新
+
+- **桌面版**:从 Releases 下载新版本安装包,覆盖安装即可(Windows 直接运行新版安装向导)。课程与设置数据不随安装包变动,升级后原课程、学习进度(浏览器 localStorage)和 AI 配置(`data/settings.json`)都会保留;无需手动迁移。
+- **源码运行**:`git pull` 后重新 `npm install && npm run build`,重启服务即可。
+
 ## 桌面版(Electron)
 
 - `npm run dev:desktop`:启动内嵌服务器 + Electron 窗口
 - 数据目录:`~/.config/freecodelearn/data`(可用 `FCL_DATA_DIR` 覆盖)
 - 打包:先 `npm run build`,再 `npx electron-builder --linux`(国内网络需 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`)
+- 三平台产物:Linux(AppImage + deb)/ Windows(NSIS exe,Linux 上可直接交叉打包 `npx electron-builder --win nsis`);macOS 需要 macOS 机器打包
 
 ## 项目结构
 
