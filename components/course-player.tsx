@@ -211,6 +211,9 @@ export default function CoursePlayer({ course }: { course: Course }) {
     if (chapterDone) return;
     if (!next) return;
     setPassedFlash(true);
+    // 命令行/终端类挑战:不自动跳转,等用户看完终端输出、点「进入下一步」再走
+    const lang = step?.language ?? "";
+    if (/shell|git|bash|zsh|powershell|cmd|命令行|终端|命令/i.test(lang)) return;
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     flashTimerRef.current = setTimeout(() => {
       setPassedFlash(false);

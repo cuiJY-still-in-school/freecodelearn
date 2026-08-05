@@ -28,9 +28,9 @@
   --color-green-soft: var(--green-soft);
   --color-red: var(--red);
   --color-red-soft: var(--red-soft);
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: ui-sans-serif, system-ui, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-serif: Georgia, "Times New Roman", "Noto Serif SC", "Songti SC", "STSong", serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, "JetBrains Mono", monospace;
+  --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", "Cascadia Code", Consolas, monospace;
 }
 
 body {

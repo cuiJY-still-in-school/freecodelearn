@@ -290,13 +290,28 @@ function todayStr(): string {
   ).padStart(2, "0")}(${w})`;
 }
 
-/** 系统参数:日期、时区、语言、用途,注入所有生成阶段提示词 */
+/** 学习者操作系统与终端(命令行/Shell 类课程必须贴合该平台) */
+function platformStr(): string {
+  switch (process.platform) {
+    case "win32":
+      return "Windows(终端为 PowerShell 或 cmd)";
+    case "darwin":
+      return "macOS(终端为 zsh)";
+    default:
+      return "Linux(终端为 bash)";
+  }
+}
+
+/** 系统参数:日期、时区、语言、学习者系统环境、用途,注入所有生成阶段提示词 */
 const systemContext = () =>
   `【系统参数】
 - 当前日期:${todayStr()}(请据此判断资料与信息的时效性)
 - 系统时区:${Intl.DateTimeFormat().resolvedOptions().timeZone}
+- 学习者操作系统:${platformStr()}
 - 语言:简体中文
-- 用途:为学习者在「FreeCodeLearn」生成 freeCodeCamp 风格的编程课程`;
+- 用途:为学习者在「FreeCodeLearn」生成 freeCodeCamp 风格的编程课程
+
+命令行/Shell 类课程必须使用学习者操作系统真实可用的命令与语法(Windows 用 PowerShell/cmd,Linux/macOS 用 bash/zsh),提示中给出的练习命令须能在该平台直接执行;禁止出现跨平台不兼容的命令拼写。`;
 
 const RESEARCH_PLAN_TASK = `你是资料检索策划。请根据下面的课程主题,规划需要联网查询的知识点与目标网站,输出严格 JSON(不要任何多余文字):
 {"queries": ["查询词1", "查询词2", ...], "sites": ["权威域名1", "权威域名2", ...]}

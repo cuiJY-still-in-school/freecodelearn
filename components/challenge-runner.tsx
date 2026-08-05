@@ -88,6 +88,7 @@ export default function ChallengeRunner({
   const [showSolution, setShowSolution] = useState(false);
   const [copied, setCopied] = useState(false);
   const [attempts, setAttempts] = useState(0);
+  const [terminalOutput, setTerminalOutput] = useState("");
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settledRef = useRef(false);
@@ -114,6 +115,15 @@ export default function ChallengeRunner({
   const isCSS = !isHTML && /css/i.test(language ?? "");
   const isJS = /javascript/i.test(language ?? "");
   const isText = !isHTML && !isCSS && !isJS;
+  // 命令行/终端类语言(Shell/Git 等):可在本机真实执行并回显输出
+  const isTerminalLang = isText && /shell|git|bash|zsh|powershell|cmd|命令行|终端|命令/i.test(language ?? "");
+
+  // 快捷键提示按平台显示(Cmd / Ctrl)
+  const isMac =
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || "");
+  const modLabel = isMac ? "⌘" : "Ctrl";
+  const runHint = isMac ? "⌘⏎" : "Ctrl+⏎";
 
   const handleMessage = useCallback(
     (e: MessageEvent) => {
@@ -141,7 +151,7 @@ export default function ChallengeRunner({
     };
   }, [handleMessage]);
 
-  function run() {
+  async function run() {
     if (!tests) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     setResult(null);
@@ -152,6 +162,29 @@ export default function ChallengeRunner({
 
     // 编辑区代码(用户实际改动部分):freeCodeCamp 的 code 变量,测试可用正则/字符串断言
     const editable = extractEditableCode(code);
+
+    // 命令行/终端类挑战(桌面版):把用户输入的命令真实执行,回显终端输出
+    let termOut = "";
+    if (isTerminalLang && typeof window !== "undefined") {
+      const term = (window as unknown as { fclTerminal?: { exec(c: string): Promise<{ stdout?: string; stderr?: string; error?: string; code?: number }> } }).fclTerminal;
+      if (term) {
+        const cmds = editable
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const lines: string[] = [];
+        for (const c of cmds) {
+          lines.push(`$ ${c}`);
+          const r = await term.exec(c);
+          if (r?.stdout?.trim()) lines.push(r.stdout.replace(/\n$/, ""));
+          if (r?.stderr) lines.push(r.stderr);
+          if (r?.error) lines.push(r.error);
+          if (r && r.code) lines.push(`(exit code ${r.code})`);
+        }
+        termOut = lines.join("\n");
+        setTerminalOutput(termOut);
+      }
+    }
 
     let body: string;
     if (isCSS) {
@@ -244,6 +277,7 @@ ${HARNESS_SUFFIX}
     setResult(null);
     setTimeoutMsg(false);
     setShowSolution(false);
+    setTerminalOutput("");
   }
 
   return (
@@ -268,9 +302,9 @@ ${HARNESS_SUFFIX}
             onClick={run}
             disabled={running}
             className="rounded-lg bg-ink px-4 py-1.5 text-xs font-semibold text-bg transition hover:bg-accent disabled:opacity-50"
-            title="快捷键:Ctrl + Enter"
+            title={`快捷键:${isMac ? "Cmd" : "Ctrl"} + Enter`}
           >
-            {running ? "运行中..." : "运行测试 ⌘⏎"}
+            {running ? "运行中..." : `运行测试 ${runHint}`}
           </button>
         </div>
       </div>
@@ -292,6 +326,20 @@ ${HARNESS_SUFFIX}
         </div>
       )}
       <iframe ref={iframeRef} className="hidden" title="test-runner" />
+
+      {isTerminalLang && terminalOutput && (
+        <div className="border-t border-line bg-[#0d1117]">
+          <div className="flex items-center gap-1.5 border-b border-white/10 px-5 py-2 text-[11px] text-ink-soft/70">
+            <span className="h-2.5 w-2.5 rounded-full bg-red/60" />
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-400/60" />
+            <span className="h-2.5 w-2.5 rounded-full bg-green/60" />
+            终端输出(命令已在本机真实执行)
+          </div>
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap px-5 py-3 font-mono text-xs leading-relaxed text-green-400">
+            {terminalOutput}
+          </pre>
+        </div>
+      )}
 
       {timeoutMsg && (
         <div className="border-t border-red/20 bg-red-soft px-5 py-3 text-sm text-red">

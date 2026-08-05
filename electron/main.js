@@ -1,11 +1,18 @@
-const { app, BrowserWindow, shell } = require("electron");
-const { spawn } = require("child_process");
+const { app, BrowserWindow, shell, ipcMain } = require("electron");
+const { spawn, exec } = require("child_process");
 const path = require("path");
 const net = require("net");
 
 const DEV_PORT = 3000;
 let serverProcess = null;
 let win = null;
+
+// 终端练习白名单:仅允许常见安全命令(不包含 rm/mv/dd/重定向等危险操作)
+const ALLOWED_TERMINAL_CMDS = new Set([
+  "git", "python", "python3", "pip", "pip3", "node", "npm", "npx",
+  "ls", "pwd", "echo", "cat", "mkdir", "touch", "cd", "cp", "grep",
+  "find", "head", "tail", "whoami", "uname", "tree", "clear",
+]);
 
 function isDev() {
   return !app.isPackaged;
@@ -114,11 +121,13 @@ function createWindow(url) {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, "preload.js"),
     },
   });
 
   win.loadURL(url);
 
+  // target=_blank / window.open → 默认浏览器打开
   win.webContents.setWindowOpenHandler(({ url: target }) => {
     if (target.startsWith("http")) {
       shell.openExternal(target);
@@ -126,10 +135,55 @@ function createWindow(url) {
     return { action: "deny" };
   });
 
+  // 页面内普通超链接点击 → 站外跳转交给默认浏览器,避免在应用内打开
+  win.webContents.on("will-navigate", (event, target) => {
+    try {
+      const own = new URL(win.webContents.getURL());
+      const t = new URL(target);
+      if (t.origin !== own.origin) {
+        event.preventDefault();
+        shell.openExternal(target);
+      }
+    } catch {
+      // 非法 URL 忽略
+    }
+  });
+
   win.on("closed", () => {
     win = null;
   });
 }
+
+// 终端练习:白名单内命令在本机执行,返回真实输出(15s 超时,工作目录为用户数据目录)
+ipcMain.handle("fcl-exec", async (_event, cmdRaw) => {
+  const cmd = String(cmdRaw ?? "").trim();
+  if (!cmd) return { ok: false, error: "空命令" };
+  // 多行/&& 拼接的命令逐段校验,每段首词都必须在白名单内
+  const segments = cmd
+    .split(/\n|&&/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const seg of segments) {
+    const first = seg.split(/\s+/)[0].replace(/^.*[\\/]/, "");
+    if (!ALLOWED_TERMINAL_CMDS.has(first)) {
+      return { ok: false, error: `命令「${first}」不在允许列表中(为安全起见仅支持常见练习命令)` };
+    }
+  }
+  const cwd =
+    process.env.FCL_DATA_DIR ?? (app.isPackaged ? app.getPath("userData") : process.cwd());
+  const joined = segments.join(" && ");
+  return new Promise((resolve) => {
+    exec(joined, { timeout: 15000, cwd }, (err, stdout, stderr) => {
+      resolve({
+        ok: !err,
+        code: err && typeof err.code === "number" ? err.code : 0,
+        stdout: stdout ?? "",
+        stderr: (err?.stderr ?? stderr ?? "").trim(),
+        error: err && !err.code ? String(err.message ?? err).slice(0, 500) : undefined,
+      });
+    });
+  });
+});
 
 app.whenReady().then(async () => {
   try {
