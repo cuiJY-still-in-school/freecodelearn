@@ -75,18 +75,6 @@ npm run dev
 
 保存后即生效,当前生效的配置会显示在设置页顶部(仅展示,不回显密钥)。
 
-### 免费方案:OpenCode Zen(无需信用卡)
-
-1. 到 <https://opencode.ai/zen> 注册并创建 API Key
-2. 设置页填入:
-
-```
-Base URL: https://opencode.ai/zen/v1
-模型:     deepseek-v4-flash-free(或 minimax-m2.5-free / qwen3.6-plus-free / big-pickle)
-```
-
-免费额度约 100 次请求/天。
-
 也可用环境变量 `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL`(优先级低于网页设置)。
 
 ## 更新
