@@ -26,14 +26,6 @@
 - **课程导入导出**:导出 .fcl 文件(含课程与学习进度),随时导入恢复
 - 课程数据存于 `data/courses/`(JSON 文件,gitignore)
 
-## 快速开始
-
-```bash
-npm install
-npm run dev
-# 打开 http://localhost:3000
-```
-
 ## 安装(桌面版)
 
 发布版提供三个平台的安装包(GitHub Releases),无需 Node.js 环境:
