@@ -1,7 +1,6 @@
 const { app, BrowserWindow, shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
-const fs = require("fs");
 const net = require("net");
 
 const DEV_PORT = 3000;
@@ -16,7 +15,6 @@ function getNextCmd() {
   if (isDev()) return null;
   return path.join(
     process.resourcesPath,
-    "app.asar.unpacked",
     "server",
     "node_modules",
     "next",
@@ -27,7 +25,7 @@ function getNextCmd() {
 }
 
 function getServerDir() {
-  return path.join(process.resourcesPath, "app.asar.unpacked", "server");
+  return path.join(process.resourcesPath, "server");
 }
 
 function findFreePort(start) {

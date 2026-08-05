@@ -5,7 +5,6 @@ import CodeMirror from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 import { css } from "@codemirror/lang-css";
 import {
-  buildSeedCode,
   extractEditableCode,
   sanitizeEditableMarks,
 } from "@/lib/types";
@@ -106,7 +105,10 @@ export default function ChallengeRunner({
   }, []);
 
   const runRef = useRef<(() => void) | null>(null);
-  runRef.current = () => run();
+  useEffect(() => {
+    // 每次渲染后把最新 run 挂到 ref,供 Ctrl+Enter 快捷键调用
+    runRef.current = () => run();
+  });
 
   const isHTML = /html/i.test(language ?? "");
   const isCSS = !isHTML && /css/i.test(language ?? "");
