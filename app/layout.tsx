@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import fs from "fs";
+import path from "path";
 import "./globals.css";
 import Nav from "@/components/nav";
+import UpdateBanner from "@/components/update-banner";
 
 export const metadata: Metadata = {
   title: "FreeCodeLearn - AI 生成编程课程",
@@ -16,6 +19,17 @@ export const viewport: Viewport = {
 
 import type { Viewport } from "next";
 
+const appVersion: string = (() => {
+  try {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), "package.json"), "utf-8")
+    ) as { version?: string };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -24,6 +38,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-bg text-ink">
+        <UpdateBanner current={appVersion} />
         <Nav />
         <main className="flex-1">{children}</main>
       </body>
