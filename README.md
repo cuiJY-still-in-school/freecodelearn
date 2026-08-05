@@ -69,13 +69,13 @@ npm run dev
 | --- | --- | --- |
 | Provider | 服务商名称(仅作显示) | `DeepSeek` |
 | parseMethod | 协议格式,默认 `openai`;Anthropic 官方 API 选 `anthropic` | `openai` |
-| Base URL | API 地址 | `https://api.openai.com/v1` |
+| Base URL | API 地址 | `https://api.deepseek.com/v1` |
 | API Key | 密钥 | `sk-...` |
-| 模型 | 模型 ID | `gpt-4o` |
+| 模型 | 模型 ID | `deepseek-v4-flash` |
 
 保存后即生效,当前生效的配置会显示在设置页顶部(仅展示,不回显密钥)。
 
-### 默认推荐:DeepSeek
+### DeepSeek 配置
 
 到 <https://platform.deepseek.com> 注册并创建 API Key,设置页填入:
 
