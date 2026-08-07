@@ -65,11 +65,11 @@ jobs:
         with:
           name: installers-${{ matrix.artifact }}
           path: |
-            release/*.AppImage
-            release/*.deb
-            release/*.rpm
-            release/*.exe
-            release/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*.exe
+            dist/*.dmg
           if-no-files-found: error
           retention-days: 14
 
