@@ -146,6 +146,34 @@ export default function SettingsPage() {
           placeholder="DeepSeek / OpenAI / Anthropic / 自定义..."
           className="mb-4 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          {[
+            { name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
+            { name: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
+            { name: "Anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-20250514" },
+            { name: "通义千问", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
+            { name: "Kimi", baseUrl: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k" },
+            { name: "Ollama(本地)", baseUrl: "http://127.0.0.1:11434/v1", model: "qwen2.5" },
+          ].map((p) => (
+            <button
+              key={p.name}
+              type="button"
+              onClick={() => {
+                setProvider(p.name);
+                setBaseUrl(p.baseUrl);
+                setModel(p.model);
+                setParseMethod(p.name === "Anthropic" ? "anthropic" : "openai");
+              }}
+              className="rounded-full border border-line bg-bg px-3 py-1 text-xs text-ink-soft transition hover:border-accent/50 hover:bg-accent-soft/40 hover:text-accent"
+              title={`${p.baseUrl} · ${p.model}`}
+            >
+              {p.name}
+            </button>
+          ))}
+          <span className="self-center text-[11px] text-ink-soft/70">
+            点击预设自动填充,只需补 API Key
+          </span>
+        </div>
         <label className="mb-1.5 block text-sm font-medium text-ink">
           parseMethod(协议格式)
         </label>
