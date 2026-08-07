@@ -7,10 +7,17 @@ interface Props {
   questions: QuizQuestion[];
   /** 本章核心概念标签(全部答对后的巩固横幅) */
   chapterConcepts?: string[];
+  /** 每次提交时逐题回调(原题与错题重做均触发),用于间隔复习调度 */
+  onReview?: (question: QuizQuestion, correct: boolean) => void;
   onComplete: () => void;
 }
 
-export default function QuizView({ questions, chapterConcepts, onComplete }: Props) {
+export default function QuizView({
+  questions,
+  chapterConcepts,
+  onReview,
+  onComplete,
+}: Props) {
   // activeIdx 为 null 表示全部题目;错题重做时为错题下标数组
   const [activeIdx, setActiveIdx] = useState<number[] | null>(null);
   const shown = activeIdx ? activeIdx.map((i) => questions[i]) : questions;
@@ -34,6 +41,7 @@ export default function QuizView({ questions, chapterConcepts, onComplete }: Pro
       (q, i) => answers[i] === q.correctIndex
     ).length;
     setChecked(true);
+    if (onReview) shown.forEach((q, i) => onReview(q, answers[i] === q.correctIndex));
     if (correct === shown.length) onComplete();
   }
 

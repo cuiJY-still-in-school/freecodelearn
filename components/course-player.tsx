@@ -12,6 +12,11 @@ import {
   prevStepId,
 } from "@/lib/types";
 import { loadProgress, saveProgress, type ProgressMap } from "@/lib/progress";
+import {
+  dueReviewKeys,
+  recordAnswer,
+} from "@/lib/review";
+import type { QuizQuestion } from "@/lib/types";
 import CourseSidebar from "@/components/course-sidebar";
 import LessonView from "@/components/lesson-view";
 import ChallengeRunner from "@/components/challenge-runner";
@@ -95,6 +100,19 @@ export default function CoursePlayer({ course }: { course: Course }) {
   const [appending, setAppending] = useState(false);
   const [appendMsg, setAppendMsg] = useState("");
   const [progress, setProgress] = useState<ProgressMap>({});
+  // 间隔复习模式:到期题目合成为一次复习测验
+  const [reviewMode, setReviewMode] = useState(false);
+  const [reviewTick, setReviewTick] = useState(0);
+  const reviewItems = useMemo(() => {
+    const items: { key: string; question: QuizQuestion }[] = [];
+    for (const key of dueReviewKeys(course.id, progress)) {
+      const stepId = key.slice(0, key.lastIndexOf(":"));
+      const st = flat.find((f) => f.step.id === stepId);
+      const q = st?.step.questions?.[Number(key.slice(key.lastIndexOf(":") + 1))];
+      if (q) items.push({ key, question: q });
+    }
+    return items;
+  }, [course.id, progress, flat, reviewTick]);
 
   // 后台章节生成:进入课程页即触发一次,并轮询课程文件反映生成进度
   useEffect(() => {
@@ -372,6 +390,15 @@ export default function CoursePlayer({ course }: { course: Course }) {
                 style={{ width: `${pct}%` }}
               />
             </div>
+            {reviewItems.length > 0 && (
+              <button
+                onClick={() => setReviewMode(true)}
+                className="shrink-0 rounded-lg border border-accent/40 bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent transition hover:bg-accent hover:text-white"
+                title="间隔复习:到期题目混合测验,巩固记忆"
+              >
+                🗂 待复习 {reviewItems.length}
+              </button>
+            )}
             <span className="shrink-0 font-mono text-xs text-ink-soft">
               {doneCount}/{total} · {pct}%
             </span>
@@ -511,6 +538,39 @@ export default function CoursePlayer({ course }: { course: Course }) {
             </div>
           )}
 
+          {/* 间隔复习模式:到期题目混合测验 */}
+          {reviewMode ? (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-accent-soft px-5 py-4">
+                <div>
+                  <h2 className="font-serif text-base font-bold text-accent">
+                    🗂 间隔复习
+                  </h2>
+                  <p className="mt-0.5 text-xs text-accent/80">
+                    {reviewItems.length} 道到期题目,混合测验巩固记忆。答对进入下一箱,答错回到第一箱
+                  </p>
+                </div>
+                <button
+                  onClick={() => setReviewMode(false)}
+                  className="rounded-xl border border-accent/40 bg-white px-4 py-2 text-xs font-semibold text-accent transition hover:bg-accent/10"
+                >
+                  退出复习
+                </button>
+              </div>
+              <QuizView
+                questions={reviewItems.map((i) => i.question)}
+                onReview={(q, correct) => {
+                  const it = reviewItems.find((i) => i.question === q);
+                  if (it) recordAnswer(course.id, it.key, correct);
+                }}
+                onComplete={() => {
+                  setReviewMode(false);
+                  setReviewTick((t) => t + 1);
+                }}
+              />
+            </div>
+          ) : (
+            <>
           {step.bodyMarkdown && (
             <div className="mb-8">
               <LessonView content={step.bodyMarkdown} />
@@ -561,6 +621,11 @@ export default function CoursePlayer({ course }: { course: Course }) {
                       ?.steps.flatMap((s) => s.concepts ?? []) ?? []
                   )
                 )}
+                onReview={(q, correct) => {
+                  const qi = step.questions!.indexOf(q);
+                  if (qi >= 0)
+                    recordAnswer(course.id, `${step.id}:${qi}`, correct);
+                }}
                 onComplete={() => handlePassed("correct")}
               />
             ) : (
@@ -587,6 +652,8 @@ export default function CoursePlayer({ course }: { course: Course }) {
             >
               {next ? "完成本节,继续 →" : "标记为已完成"}
             </button>
+          )}
+            </>
           )}
 
           {/* 底部导航 */}

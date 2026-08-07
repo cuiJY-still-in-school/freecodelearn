@@ -136,6 +136,22 @@ export default function CourseSidebar({
                       )}
                     </span>
                     <span className="truncate">{step.title}</span>
+                    {step.type === "challenge" &&
+                      typeof step.difficulty === "number" && (
+                        <span
+                          className="ml-auto flex shrink-0 items-center gap-0.5"
+                          title={`难度 ${step.difficulty}/5`}
+                        >
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <span
+                              key={n}
+                              className={`h-1 w-1 rounded-full ${
+                                n <= step.difficulty! ? "bg-accent/70" : "bg-line"
+                              }`}
+                            />
+                          ))}
+                        </span>
+                      )}
                   </button>
                 );
               })}
