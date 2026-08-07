@@ -493,7 +493,7 @@ ${HARNESS_SUFFIX}
               <button
                 onClick={() => setHintsShown((h) => h + 1)}
                 disabled={attempts < 2}
-                className="rounded-lg border border-amber/40 bg-amber-50 px-3.5 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-lg border border-amber/40 bg-amber-soft px-3.5 py-1.5 text-xs font-semibold text-amber-deep transition hover:bg-amber-soft disabled:cursor-not-allowed disabled:opacity-40"
               >
                 💡 查看提示 {hintsShown + 1}/{hints.length}
               </button>
@@ -509,7 +509,7 @@ ${HARNESS_SUFFIX}
           {hints.slice(0, hintsShown).map((h, i) => (
             <div
               key={i}
-              className="fade-up mt-2 rounded-xl border border-amber/30 bg-amber-50 px-3.5 py-2 text-xs leading-relaxed text-amber-800"
+              className="fade-up mt-2 rounded-xl border border-amber/30 bg-amber-soft px-3.5 py-2 text-xs leading-relaxed text-amber-deep"
             >
               <span className="font-bold text-amber-700">提示 {i + 1}:</span> {h}
             </div>

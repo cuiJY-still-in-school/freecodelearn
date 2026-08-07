@@ -13,6 +13,63 @@
   --green-soft: #e6f0e8;
   --red: #b3402e;
   --red-soft: #f8e7e3;
+  --amber-soft: #fdf3e0;
+  --amber-deep: #92400e;
+  /* 正文排版(暖纸感阅读色) */
+  --prose-text: #3d3931;
+  --prose-heading: #1f1d1a;
+  --prose-quote: #5c584e;
+  --prose-code-text: #9a4a2e;
+  --scroll-thumb: #d6d3c9;
+  --scroll-thumb-hover: #c0bcb0;
+}
+
+:root[data-theme="dark"] {
+  --bg: #1a1917;
+  --bg-subtle: #242220;
+  --card: #23211e;
+  --border: #34322e;
+  --text: #ece8e1;
+  --text-secondary: #a8a297;
+  --accent: #e08a68;
+  --accent-soft: #3a2b23;
+  --green: #7fb98c;
+  --green-soft: #22382a;
+  --red: #d9775f;
+  --red-soft: #3d2620;
+  --amber-soft: #33291a;
+  --amber-deep: #f5c77e;
+  --prose-text: #d8d3ca;
+  --prose-heading: #f0ece5;
+  --prose-quote: #b3ac9f;
+  --prose-code-text: #e39a7c;
+  --scroll-thumb: #4a4741;
+  --scroll-thumb-hover: #5c5851;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1917;
+    --bg-subtle: #242220;
+    --card: #23211e;
+    --border: #34322e;
+    --text: #ece8e1;
+    --text-secondary: #a8a297;
+    --accent: #e08a68;
+    --accent-soft: #3a2b23;
+    --green: #7fb98c;
+    --green-soft: #22382a;
+    --red: #d9775f;
+    --red-soft: #3d2620;
+    --amber-soft: #33291a;
+    --amber-deep: #f5c77e;
+    --prose-text: #d8d3ca;
+    --prose-heading: #f0ece5;
+    --prose-quote: #b3ac9f;
+    --prose-code-text: #e39a7c;
+    --scroll-thumb: #4a4741;
+    --scroll-thumb-hover: #5c5851;
+  }
 }
 
 @theme inline {
@@ -28,6 +85,8 @@
   --color-green-soft: var(--green-soft);
   --color-red: var(--red);
   --color-red-soft: var(--red-soft);
+  --color-amber-soft: var(--amber-soft);
+  --color-amber-deep: var(--amber-deep);
   --font-sans: ui-sans-serif, system-ui, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-serif: Georgia, "Times New Roman", "Noto Serif SC", "Songti SC", "STSong", serif;
   --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", "Cascadia Code", Consolas, monospace;
@@ -46,7 +105,7 @@ body {
 
 /* ---------- 课程正文(Anthropic 阅读体验) ---------- */
 .prose-course {
-  color: #3d3931;
+  color: var(--prose-text);
   font-size: 1.02rem;
   line-height: 1.85;
 }
@@ -55,7 +114,7 @@ body {
 .prose-course h3 {
   font-family: var(--font-serif);
   font-weight: 700;
-  color: #1f1d1a;
+  color: var(--prose-heading);
   letter-spacing: -0.01em;
 }
 .prose-course h1 {
@@ -100,7 +159,7 @@ body {
   border-radius: 5px;
   padding: 0.12rem 0.4rem;
   font-size: 0.85em;
-  color: #9a4a2e;
+  color: var(--prose-code-text);
   font-family: var(--font-mono);
 }
 .prose-course pre {
@@ -129,10 +188,10 @@ body {
   border-radius: 0 8px 8px 0;
   padding: 0.6rem 1rem;
   margin: 1rem 0;
-  color: #5c584e;
+  color: var(--prose-quote);
 }
 .prose-course strong {
-  color: #1f1d1a;
+  color: var(--prose-heading);
   font-weight: 600;
 }
 .prose-course a {
@@ -230,10 +289,10 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d6d3c9;
+  background: var(--scroll-thumb);
   border-radius: 5px;
   border: 2px solid var(--bg);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #c0bcb0;
+  background: var(--scroll-thumb-hover);
 }

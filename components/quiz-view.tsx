@@ -180,7 +180,7 @@ export default function QuizView({
           className={`fade-up rounded-2xl border p-5 text-sm ${
             allCorrect
               ? "border-green/30 bg-green-soft text-green"
-              : "border-amber/40 bg-amber-50 text-amber-700"
+              : "border-amber/40 bg-amber-soft text-amber-deep"
           }`}
         >
           {allCorrect ? (
@@ -195,7 +195,7 @@ export default function QuizView({
                   {chapterConcepts.map((c) => (
                     <span
                       key={c}
-                      className="mx-0.5 inline-block rounded-full border border-green/30 bg-white/60 px-2 py-0.5 font-mono text-[11px]"
+                      className="mx-0.5 inline-block rounded-full border border-green/30 bg-card/60 px-2 py-0.5 font-mono text-[11px]"
                     >
                       {c}
                     </span>
@@ -211,7 +211,7 @@ export default function QuizView({
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   onClick={reworkWrong}
-                  className="rounded-xl border border-amber-500/40 bg-white px-4 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
+                  className="rounded-xl border border-amber-500/40 bg-card px-4 py-2 text-xs font-semibold text-amber-deep transition hover:bg-amber-soft"
                 >
                   只重做答错的题 ({wrongIdx.length})
                 </button>
@@ -221,7 +221,7 @@ export default function QuizView({
                     setAnswers(questions.map(() => null));
                     setChecked(false);
                   }}
-                  className="rounded-xl border border-amber-500/40 bg-white px-4 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
+                  className="rounded-xl border border-amber-500/40 bg-card px-4 py-2 text-xs font-semibold text-amber-deep transition hover:bg-amber-soft"
                 >
                   全部重新作答
                 </button>

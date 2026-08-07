@@ -45,7 +45,7 @@ const STEP_BADGE: Record<string, string> = {
 const STEP_BADGE_CLS: Record<string, string> = {
   lesson: "bg-blue-50 text-blue-700 border-blue-200",
   challenge: "bg-purple-50 text-purple-700 border-purple-200",
-  quiz: "bg-amber-50 text-amber-700 border-amber-200",
+  quiz: "bg-amber-soft text-amber-deep border-amber/30",
 };
 
 const CONFETTI_COLORS = ["#d97757", "#e8c468", "#7fb069", "#6a9fd8", "#b08bd0"];
@@ -605,7 +605,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
               </span>
               <button
                 onClick={() => setGenTick((g) => g + 1)}
-                className="shrink-0 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red transition hover:bg-red/10"
+                className="shrink-0 rounded-lg border border-red-300 bg-card px-3 py-1.5 text-xs font-semibold text-red transition hover:bg-red/10"
               >
                 ↻ 重试生成
               </button>
@@ -626,7 +626,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
                 </div>
                 <button
                   onClick={() => setReviewMode(false)}
-                  className="rounded-xl border border-accent/40 bg-white px-4 py-2 text-xs font-semibold text-accent transition hover:bg-accent/10"
+                  className="rounded-xl border border-accent/40 bg-card px-4 py-2 text-xs font-semibold text-accent transition hover:bg-accent/10"
                 >
                   退出复习
                 </button>

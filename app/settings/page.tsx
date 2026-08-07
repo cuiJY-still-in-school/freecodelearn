@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getTheme, setTheme, type Theme } from "@/lib/theme";
 
 export default function SettingsPage() {
+  const [theme, setThemeState] = useState<Theme>("system");
   const [provider, setProvider] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -23,6 +25,7 @@ export default function SettingsPage() {
   }>(null);
 
   useEffect(() => {
+    setThemeState(getTheme());
     fetch("/api/settings")
       .then((r) => r.json())
       .then((d) => {
@@ -108,6 +111,32 @@ export default function SettingsPage() {
         onSubmit={save}
         className="rounded-2xl border border-line bg-card p-6 shadow-sm"
       >
+        <label className="mb-1.5 block text-sm font-medium text-ink">
+          外观主题
+        </label>
+        <div className="mb-4 grid grid-cols-3 gap-2">
+          {([
+            ["system", "跟随系统"],
+            ["light", "浅色"],
+            ["dark", "深色"],
+          ] as [Theme, string][]).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => {
+                setThemeState(v);
+                setTheme(v);
+              }}
+              className={`rounded-xl border px-4 py-2.5 text-sm transition ${
+                theme === v
+                  ? "border-accent bg-accent-soft font-semibold text-accent"
+                  : "border-line bg-bg text-ink-soft hover:border-accent/40 hover:text-ink"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <label className="mb-1.5 block text-sm font-medium text-ink">
           provider
         </label>

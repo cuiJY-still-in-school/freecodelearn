@@ -514,7 +514,7 @@ export default function HomePage() {
     <div className="mx-auto max-w-6xl px-4 py-12">
       {/* AI 未配置横幅 */}
       {!aiConfigured && (
-        <div className="fade-up mx-auto mb-8 flex max-w-2xl items-center justify-between gap-4 rounded-2xl border border-amber/40 bg-amber-50 px-5 py-4">
+        <div className="fade-up mx-auto mb-8 flex max-w-2xl items-center justify-between gap-4 rounded-2xl border border-amber/40 bg-amber-soft px-5 py-4">
           <div className="text-sm text-amber-800">
             <p className="font-semibold">尚未配置 AI 服务,无法生成课程</p>
             <p className="mt-0.5 text-xs text-amber-700/80">

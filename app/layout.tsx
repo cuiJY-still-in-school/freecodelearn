@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import fs from "fs";
 import path from "path";
 import "./globals.css";
 import Nav from "@/components/nav";
 import UpdateBanner from "@/components/update-banner";
+import ThemeInit from "@/components/theme-init";
 
 export const metadata: Metadata = {
   title: "FreeCodeLearn - AI 生成编程课程",
@@ -16,8 +17,6 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
 };
-
-import type { Viewport } from "next";
 
 const appVersion: string = (() => {
   try {
@@ -37,7 +36,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" className="h-full antialiased">
+      <head>
+        {/* 首帧前应用主题,避免闪白/闪黑 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem("fcl-theme")||"system";var d=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.setAttribute("data-theme",d?"dark":"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-bg text-ink">
+        <ThemeInit />
         <UpdateBanner current={appVersion} />
         <Nav />
         <main className="flex-1">{children}</main>
