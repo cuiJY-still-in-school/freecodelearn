@@ -1,6 +1,6 @@
 {
   "name": "freecodelearn",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "private": true,
   "description": "AI 生成编程课程 - 输入主题,几分钟获得一门 freeCodeCamp 风格的完整课程",
   "author": "FreeCodeLearn",
