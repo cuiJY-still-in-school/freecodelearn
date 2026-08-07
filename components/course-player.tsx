@@ -406,6 +406,22 @@ export default function CoursePlayer({ course }: { course: Course }) {
             >
               {STEP_BADGE[step.type]}
             </span>
+            {step.type === "challenge" &&
+              typeof step.difficulty === "number" && (
+                <span
+                  className="flex items-center gap-0.5"
+                  title={`难度 ${step.difficulty}/5`}
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <span
+                      key={n}
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        n <= step.difficulty! ? "bg-accent" : "bg-line"
+                      }`}
+                    />
+                  ))}
+                </span>
+              )}
             {isDone && (
               <span className="flex items-center gap-1.5">
                 <span className="rounded-full border border-green/30 bg-green-soft px-2.5 py-0.5 text-xs font-medium text-green">
@@ -537,6 +553,13 @@ export default function CoursePlayer({ course }: { course: Course }) {
               <QuizView
                 key={step.id}
                 questions={step.questions}
+                chapterConcepts={Array.from(
+                  new Set(
+                    courseState.chapters
+                      .find((c) => c.steps.some((s) => s.id === step.id))
+                      ?.steps.flatMap((s) => s.concepts ?? []) ?? []
+                  )
+                )}
                 onComplete={() => handlePassed("correct")}
               />
             ) : (

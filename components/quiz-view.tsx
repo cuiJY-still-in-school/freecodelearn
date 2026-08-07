@@ -5,32 +5,61 @@ import type { QuizQuestion } from "@/lib/types";
 
 interface Props {
   questions: QuizQuestion[];
+  /** 本章核心概念标签(全部答对后的巩固横幅) */
+  chapterConcepts?: string[];
   onComplete: () => void;
 }
 
-export default function QuizView({ questions, onComplete }: Props) {
+export default function QuizView({ questions, chapterConcepts, onComplete }: Props) {
+  // activeIdx 为 null 表示全部题目;错题重做时为错题下标数组
+  const [activeIdx, setActiveIdx] = useState<number[] | null>(null);
+  const shown = activeIdx ? activeIdx.map((i) => questions[i]) : questions;
   const [answers, setAnswers] = useState<(number | null)[]>(
     questions.map(() => null)
   );
   const [checked, setChecked] = useState(false);
+  const [round, setRound] = useState(1);
 
-  const allAnswered = answers.every((a) => a !== null);
+  const allAnswered = shown.every((_, i) => answers[i] !== null);
   const score = checked
-    ? answers.filter((a, i) => a === questions[i].correctIndex).length
+    ? shown.filter((q, i) => answers[i] === q.correctIndex).length
     : 0;
-  const allCorrect = checked && score === questions.length;
+  const allCorrect = checked && score === shown.length;
+  const wrongIdx = shown
+    .map((_, i) => (answers[i] !== shown[i].correctIndex ? i : -1))
+    .filter((i) => i >= 0);
 
   function check() {
-    const correct = answers.filter(
-      (a, i) => a === questions[i].correctIndex
+    const correct = shown.filter(
+      (q, i) => answers[i] === q.correctIndex
     ).length;
     setChecked(true);
-    if (correct === questions.length) onComplete();
+    if (correct === shown.length) onComplete();
+  }
+
+  /** 重做答错的题:只保留错题,重置答案,继续间隔回忆 */
+  function reworkWrong() {
+    const wrong = activeIdx
+      ? wrongIdx.map((wi) => activeIdx[wi])
+      : wrongIdx;
+    setActiveIdx(wrong);
+    setAnswers(wrong.map(() => null));
+    setChecked(false);
+    setRound((r) => r + 1);
+    window.setTimeout(
+      () => document.querySelector("[data-quiz-top]")?.scrollIntoView({ behavior: "smooth" }),
+      0
+    );
   }
 
   return (
-    <div className="space-y-5">
-      {questions.map((q, qi) => {
+    <div className="space-y-5" data-quiz-top>
+      {round > 1 && (
+        <div className="fade-up rounded-xl border border-accent/30 bg-accent-soft px-4 py-2.5 text-xs text-accent">
+          错题重做中:只显示你答错的 {shown.length} 题。全对即可通过,先想清楚再作答。
+        </div>
+      )}
+      {shown.map((q, qi) => {
         const isWrong = checked && answers[qi] !== q.correctIndex;
         return (
           <div
@@ -108,10 +137,12 @@ export default function QuizView({ questions, onComplete }: Props) {
             disabled={!allAnswered}
             className="rounded-xl bg-ink px-6 py-2.5 text-sm font-semibold text-bg transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
           >
-            提交答案
+            {activeIdx ? "提交答案" : "提交答案"}
           </button>
           <span className="text-xs text-ink-soft">
-            {allAnswered ? "" : `还需回答 ${questions.filter((_, i) => answers[i] === null).length} 题`}
+            {allAnswered
+              ? ""
+              : `还需回答 ${shown.filter((_, i) => answers[i] === null).length} 题`}
           </span>
         </div>
       )}
@@ -123,19 +154,50 @@ export default function QuizView({ questions, onComplete }: Props) {
               : "border-amber/40 bg-amber-50 text-amber-700"
           }`}
         >
-          {allCorrect
-            ? `✓ 全部答对 (${score}/${questions.length})!测验通过,即将继续下一项`
-            : `得分 ${score}/${questions.length},答对全部题目后才能通过`}
-          {!allCorrect && (
-            <button
-              onClick={() => {
-                setAnswers(questions.map(() => null));
-                setChecked(false);
-              }}
-              className="mt-3 rounded-xl border border-amber-500/40 bg-white px-4 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
-            >
-              重新作答
-            </button>
+          {allCorrect ? (
+            <>
+              <p>
+                ✓ {activeIdx ? "错题全部答对" : `全部答对 (${score}/${shown.length})`}
+                ,测验通过,即将继续下一项
+              </p>
+              {chapterConcepts && chapterConcepts.length > 0 && (
+                <p className="mt-2.5 text-xs leading-relaxed text-green/80">
+                  本章核心概念回顾:{" "}
+                  {chapterConcepts.map((c) => (
+                    <span
+                      key={c}
+                      className="mx-0.5 inline-block rounded-full border border-green/30 bg-white/60 px-2 py-0.5 font-mono text-[11px]"
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p>
+                得分 {score}/{shown.length},答对全部题目后才能通过
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={reworkWrong}
+                  className="rounded-xl border border-amber-500/40 bg-white px-4 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
+                >
+                  只重做答错的题 ({wrongIdx.length})
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveIdx(null);
+                    setAnswers(questions.map(() => null));
+                    setChecked(false);
+                  }}
+                  className="rounded-xl border border-amber-500/40 bg-white px-4 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
+                >
+                  全部重新作答
+                </button>
+              </div>
+            </>
           )}
         </div>
       )}
