@@ -529,6 +529,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
                 seedBefore={step.seedBefore}
                 seedAfter={step.seedAfter}
                 hints={step.hints}
+                persistKey={`${course.id}-${step.id}`}
                 allowedCommands={courseState.allowedCommands}
                 blockedCommands={courseState.blockedCommands}
                 onPassed={() => handlePassed("passed")}

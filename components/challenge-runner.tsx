@@ -29,6 +29,8 @@ interface Props {
   /** 课程声明的终端白名单扩展/禁用 */
   allowedCommands?: string[];
   blockedCommands?: string[];
+  /** 编辑器内容持久化键(课程+步骤):切走/刷新后不丢已写代码 */
+  persistKey?: string;
   onPassed?: () => void;
 }
 
@@ -84,12 +86,23 @@ export default function ChallengeRunner({
   hints,
   allowedCommands,
   blockedCommands,
+  persistKey,
   onPassed,
 }: Props) {
   const initial = !seedBefore && !seedAfter
     ? (starterCode ?? "")
     : `${seedBefore ?? ""}\n--fcc-editable-region--\n${starterCode ?? ""}\n--fcc-editable-region--\n${seedAfter ?? ""}`;
   const [code, setCode] = useState(initial);
+  // 已写代码持久化:hydration 后从 localStorage 恢复(切换步骤/刷新不丢)
+  useEffect(() => {
+    if (!persistKey) return;
+    try {
+      const saved = localStorage.getItem(`fcl-editor-${persistKey}`);
+      if (saved != null) setCode(saved);
+    } catch {
+      // 存储不可用时静默跳过
+    }
+  }, [persistKey]);
   const [result, setResult] = useState<TestResult | null>(null);
   const [running, setRunning] = useState(false);
   const [timeoutMsg, setTimeoutMsg] = useState(false);
@@ -303,6 +316,13 @@ ${HARNESS_SUFFIX}
   }
 
   function reset() {
+    if (persistKey) {
+      try {
+        localStorage.removeItem(`fcl-editor-${persistKey}`);
+      } catch {
+        // 忽略存储异常
+      }
+    }
     setCode(initial);
     setResult(null);
     setTimeoutMsg(false);
@@ -345,7 +365,16 @@ ${HARNESS_SUFFIX}
       </div>
       <CodeMirror
         value={code}
-        onChange={setCode}
+        onChange={(v) => {
+          setCode(v);
+          if (persistKey) {
+            try {
+              localStorage.setItem(`fcl-editor-${persistKey}`, v);
+            } catch {
+              // 忽略存储异常
+            }
+          }
+        }}
         height="260px"
         theme="dark"
         extensions={isCSS ? [css()] : isJS ? [javascript()] : []}
