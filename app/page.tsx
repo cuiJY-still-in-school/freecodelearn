@@ -6,6 +6,11 @@ import { useRouter } from "next/navigation";
 import type { CourseMeta } from "@/lib/store";
 import type { CourseOutline } from "@/lib/types";
 import { loadProgress } from "@/lib/progress";
+import {
+  streakDays,
+  todaySteps,
+  totalSteps,
+} from "@/lib/activity";
 
 const LEVEL_LABEL: Record<string, string> = {
   beginner: "入门",
@@ -898,6 +903,31 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {/* 学习统计 */}
+      {(() => {
+        const today = todaySteps();
+        const streak = streakDays();
+        const total = totalSteps();
+        return (
+          <section className="mt-10">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-line bg-card p-4">
+                <p className="text-xs text-ink-soft">今日完成</p>
+                <p className="mt-1 font-serif text-2xl font-bold text-accent">{today} <span className="text-sm font-normal text-ink-soft">步</span></p>
+              </div>
+              <div className="rounded-2xl border border-line bg-card p-4">
+                <p className="text-xs text-ink-soft">连续学习</p>
+                <p className="mt-1 font-serif text-2xl font-bold text-accent">{streak} <span className="text-sm font-normal text-ink-soft">天</span></p>
+              </div>
+              <div className="rounded-2xl border border-line bg-card p-4">
+                <p className="text-xs text-ink-soft">累计完成</p>
+                <p className="mt-1 font-serif text-2xl font-bold text-accent">{total} <span className="text-sm font-normal text-ink-soft">步</span></p>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
 
       {/* 课程列表 */}
       <section className="mt-16">

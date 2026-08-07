@@ -12,6 +12,7 @@ import {
   prevStepId,
 } from "@/lib/types";
 import { loadProgress, saveProgress, type ProgressMap } from "@/lib/progress";
+import { logCompletion } from "@/lib/activity";
 import {
   dueReviewKeys,
   recordAnswer,
@@ -239,6 +240,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
 
   const markDone = useCallback(
     (id: string, status: "done" | "passed" | "correct"): boolean => {
+      logCompletion();
       setProgress((prev) => {
         const next = { ...prev, [id]: status };
         saveProgress(course.id, next);
