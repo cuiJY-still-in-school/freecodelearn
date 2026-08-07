@@ -147,12 +147,30 @@ export default function CoursePlayer({ course }: { course: Course }) {
     const saved = loadProgress(course.id);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 挂载后一次性从 localStorage 初始化,SSR 阶段无法访问
     setProgress(saved);
+    let last: string | undefined;
+    try {
+      const ls = sessionStorage.getItem(`fcl-view-${course.id}`);
+      if (ls && flat.some((f) => f.step.id === ls)) last = ls;
+    } catch {
+      // 存储不可用时忽略
+    }
     const firstUndone = flat.find((f) => !saved[f.step.id]);
     if (firstUndone) setCurrentId(firstUndone.step.id);
+    // 全部完成:优先恢复上次浏览位置,否则落到最后一步
+    else if (last) setCurrentId(last);
     else if (Object.keys(saved).length > 0 && flat.length)
       setCurrentId(flat[flat.length - 1].step.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [course.id]);
+
+  // 记住当前浏览步骤:刷新/返回课程页时恢复位置
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(`fcl-view-${course.id}`, currentId);
+    } catch {
+      // 存储不可用时忽略
+    }
+  }, [currentId, course.id]);
   const [celebrating, setCelebrating] = useState(false);
   // 通过后跳转前提示(2 秒倒计时,可手动立即进入)
   const [passedFlash, setPassedFlash] = useState(false);
