@@ -22,6 +22,12 @@ export interface Step {
   seedBefore?: string;
   /** 种子代码(可编辑区之后的固定代码) */
   seedAfter?: string;
+  /** 提示梯:3 级提示,level 1 只给方向(不含代码)、level 2 给具体方法、level 3 接近实现 */
+  hints?: string[];
+  /** 本步引入/练习的核心概念标签(供复习调度与难度校验消费) */
+  concepts?: string[];
+  /** 难度自评 1-5(新概念数 + 组合技能数 + 脚手架保留度),相邻步骤差应 ≤1 */
+  difficulty?: number;
 }
 
 /** 编辑区标记,模仿 freeCodeCamp 的 --fcc-editable-region-- */

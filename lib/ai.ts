@@ -84,6 +84,12 @@ const CHAPTER_TASK = `你是课程内容作者。根据大纲中的一章,撰写
 5. lesson 要讲透,不能只有两三句:每篇 300-600 字,固定结构 = ① 过渡句承上启下;② 概念讲解:先用直觉/生活类比引出,再给准确定义,重要术语加粗、代码用反引号;③ 结合当前项目的示例代码(必须完整可运行,示例后逐行解释关键写法);④ 常见坑与易错点(这个知识点初学者最容易犯什么错、报什么错、为什么);⑤ 小结与下一步衔接。可以用 ### 小标题把内容分节,内容充实但不跑题
 5b. 示例代码质量:markdown 代码块必须标注语言(python、javascript、html、css、bash、sql 等),内容完整可运行——不得用省略号(...)糊弄、不得写伪代码,变量名与当前项目一致;示例只用本章或前面章节讲过的语法,不提前泄露后面章节的概念
 6. challenge 的 bodyMarkdown 仍用三步式,但「概念讲解」部分给足铺垫(1-2 句原理 + 一句话提醒本项目上下文),让脱离教材的学习者也能独立完成;指令必须精确到元素/属性/值,不允许出现「类似」「大概」等模糊词
+7. 每个 challenge 必须提供 3 级提示梯 hints(默认隐藏,学习者多次尝试失败后才解锁):hints[0] 只给思路方向,禁止出现代码;hints[1] 给具体方法与关键语法骨架(如函数名、属性名),禁止完整实现;hints[2] 接近实现,可直接套用。提示必须针对本步种子代码,不得泛泛而谈
+8. 每个 challenge 必须输出 difficulty(1-5 整数):评分 = 本步新引入概念数(0-2)+ 组合运用前面章节的技能数(0-2)+ 脚手架保留度(代码越完整难度越低)。同一章内相邻步骤难度差不得超过 1,难度总体随章节推进而上升
+9. 每个 challenge 必须输出 concepts(数组):本步引入或重点练习的核心概念标签(2-4 个,如 ["flex", "justify-content"])。纯复习前序概念的步骤用前序概念标签,方便系统做复习调度
+10. 交错练习:challenge 步骤数为 3 个及以上时,从第 2 个 challenge 起,每隔一个 challenge 混入 1 个「前序概念回顾」小问(如本章或前章已讲过的概念,换成新场景提问),让学习者区分新旧问题,而不是机械套模板
+11. 脚手架渐隐:同一概念连续出现 3 个 challenge 时,seed 代码按「80% 完整 → 40% 完整 → 只留函数签名/空结构」递减,练习题不得直接复用讲解里的示例(换参数/换场景,同构不同例)
+12. lesson 末尾必须加一个「✍️ 自测一下」小节:给出 1-2 个预测题(如「你认为下面这段代码输出什么?为什么?」),答案用 <details> 折叠块包住(第一行 <summary>点击查看答案</summary>,后接答案与解释)。先让学习者自己思考再展开,这是主动回忆练习,禁止直接把答案写在正文里
 
 JSON 结构(单个对象,包含该章所有步骤):
 {
@@ -97,6 +103,9 @@ JSON 结构(单个对象,包含该章所有步骤):
       "solution": "仅 challenge:编辑区的完整参考解答(只含编辑区部分,不含种子代码)",
       "tests": "仅 challenge:判题测试(见下方约定)",
       "html": "仅 challenge 且语言为 CSS:测试页面的 DOM 结构(如 <div class=\"container\"></div>)",
+      "hints": "仅 challenge:3 级提示数组(见教学法第 7 条,必须 3 个)",
+      "difficulty": "仅 challenge:难度自评 1-5(见教学法第 8 条)",
+      "concepts": "仅 challenge:概念标签数组(见教学法第 9 条)",
       "questions": "仅 quiz:选择题数组(3-5 题)"
     }
   ]
@@ -585,6 +594,17 @@ export async function generateChapter(
       step.html = rs.html ? String(rs.html) : undefined;
       step.seedBefore = rs.seedBefore ? String(rs.seedBefore) : undefined;
       step.seedAfter = rs.seedAfter ? String(rs.seedAfter) : undefined;
+      const hints = Array.isArray(rs.hints)
+        ? rs.hints.map((h) => String(h).trim()).filter(Boolean)
+        : [];
+      step.hints = hints.length >= 2 ? hints.slice(0, 3) : undefined;
+      const concepts = Array.isArray(rs.concepts)
+        ? rs.concepts.map((c) => String(c).trim()).filter(Boolean)
+        : [];
+      step.concepts = concepts.length > 0 ? concepts.slice(0, 6) : undefined;
+      const diff = Number(rs.difficulty);
+      step.difficulty =
+        Number.isInteger(diff) && diff >= 1 && diff <= 5 ? diff : undefined;
     }
     if (type === "quiz" && Array.isArray(rs.questions)) {
       step.questions = rs.questions.map((q) => {
@@ -657,9 +677,10 @@ JSON 结构:
 {"steps": [步骤数组,格式与单章生成完全一致(见下方说明)]}
 
 步骤格式与生成规则(与单章生成相同):
-- lesson:{"type":"lesson","bodyMarkdown":"图文讲解(markdown),过渡句衔接课程进度,先讲概念再给示例,术语第一次出现给出解释"}
-- challenge:{"type":"challenge","bodyMarkdown":"过渡句+概念讲解+精确指令","seedBefore":"编辑区前固定代码(可选)","starterCode":"编辑区初始内容","seedAfter":"编辑区后固定代码(可选)","solution":"编辑区完整参考解答","tests":"判题测试","html":"仅 CSS 语言需要(测试 DOM)"}
+- lesson:{"type":"lesson","bodyMarkdown":"图文讲解(markdown),过渡句衔接课程进度,先讲概念再给示例,术语第一次出现给出解释;末尾加「✍️ 自测一下」小节,预测题答案用 <details><summary>点击查看答案</summary> 折叠块包住"}
+- challenge:{"type":"challenge","bodyMarkdown":"过渡句+概念讲解+精确指令","seedBefore":"编辑区前固定代码(可选)","starterCode":"编辑区初始内容","seedAfter":"编辑区后固定代码(可选)","solution":"编辑区完整参考解答","tests":"判题测试","html":"仅 CSS 语言需要(测试 DOM)","hints":["提示1(方向,不含代码)","提示2(具体方法+关键语法骨架)","提示3(接近实现)"],"difficulty":1-5,"concepts":["概念标签"]}
 - quiz:{"type":"quiz","questions":[{"question":"题干","options":["A","B","C"],"correctIndex":0,"explanation":"解析"}]}(3-5 题,考察理解用新例子,选项互不重复,correctIndex 在范围内)
+- challenge 必须提供 3 级 hints 提示梯与 difficulty 难度自评(规则与单章生成一致:相邻步骤难度差 ≤1,难度随章节上升)
 
 challenge tests 约定(运行在浏览器沙箱):
 - 可用变量:code(编辑区代码,可正则断言)、document(渲染后 DOM)、__fcl_input(非代码语言全文)
@@ -710,6 +731,17 @@ export async function appendChapter(
       step.html = r.html ? String(r.html) : undefined;
       step.seedBefore = r.seedBefore ? String(r.seedBefore) : undefined;
       step.seedAfter = r.seedAfter ? String(r.seedAfter) : undefined;
+      const hints = Array.isArray(r.hints)
+        ? r.hints.map((h) => String(h).trim()).filter(Boolean)
+        : [];
+      step.hints = hints.length >= 2 ? hints.slice(0, 3) : undefined;
+      const concepts = Array.isArray(r.concepts)
+        ? r.concepts.map((c) => String(c).trim()).filter(Boolean)
+        : [];
+      step.concepts = concepts.length > 0 ? concepts.slice(0, 6) : undefined;
+      const diff = Number(r.difficulty);
+      step.difficulty =
+        Number.isInteger(diff) && diff >= 1 && diff <= 5 ? diff : undefined;
     }
     if (type === "quiz" && Array.isArray(r.questions)) {
       step.questions = r.questions.map((q) => {
@@ -836,6 +868,7 @@ export function sanitizeSteps(steps: Step[]): Step[] {
         explanation: q.explanation ? unescapeText(q.explanation) : undefined,
       }));
     }
+    if (s.hints) out.hints = s.hints.map(unescapeText);
     return out;
   });
   return unescaped

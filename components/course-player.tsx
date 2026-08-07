@@ -512,6 +512,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
                 language={step.language}
                 seedBefore={step.seedBefore}
                 seedAfter={step.seedAfter}
+                hints={step.hints}
                 allowedCommands={courseState.allowedCommands}
                 blockedCommands={courseState.blockedCommands}
                 onPassed={() => handlePassed("passed")}

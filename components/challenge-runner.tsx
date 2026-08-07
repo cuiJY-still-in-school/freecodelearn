@@ -24,6 +24,8 @@ interface Props {
   language?: string;
   seedBefore?: string;
   seedAfter?: string;
+  /** 3 级提示梯:先独立尝试(≥2 次失败)再逐级解锁,保护「生产性挣扎」 */
+  hints?: string[];
   /** 课程声明的终端白名单扩展/禁用 */
   allowedCommands?: string[];
   blockedCommands?: string[];
@@ -79,6 +81,7 @@ export default function ChallengeRunner({
   language,
   seedBefore,
   seedAfter,
+  hints,
   allowedCommands,
   blockedCommands,
   onPassed,
@@ -93,6 +96,7 @@ export default function ChallengeRunner({
   const [showSolution, setShowSolution] = useState(false);
   const [copied, setCopied] = useState(false);
   const [attempts, setAttempts] = useState(0);
+  const [hintsShown, setHintsShown] = useState(0);
   const [terminalOutput, setTerminalOutput] = useState("");
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -269,11 +273,11 @@ ${html ?? ""}
 const __fcl_code = ${JSON.stringify(editable)};
 const code = __fcl_code;
 ${HARNESS_PREFIX}
-try {
 ${escapeScript(sanitizeEditableMarks(code, true))}
+try {
 ${escapeScript(tests)}
 } catch (e) {
-  __fcl.fatal = "代码执行出错: " + String((e && e.message) || e);
+  __fcl.fatal = "测试执行出错: " + String((e && e.message) || e);
 }
 ${HARNESS_SUFFIX}
 <\/script>
@@ -298,6 +302,7 @@ ${HARNESS_SUFFIX}
     setResult(null);
     setTimeoutMsg(false);
     setShowSolution(false);
+    setHintsShown(0);
     setTerminalOutput("");
   }
 
@@ -439,6 +444,41 @@ ${HARNESS_SUFFIX}
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 提示梯:失败 ≥2 次后解锁,逐级揭示,先独立挣扎再求助 */}
+      {hints && hints.length > 0 && result && !timeoutMsg && result.failed.length > 0 && (
+        <div className="border-t border-line px-5 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-medium text-ink-soft">
+              {hintsShown > 0 ? "提示逐级解锁中" : "卡住了?提示可以帮你找到方向"}
+            </span>
+            {hintsShown < hints.length ? (
+              <button
+                onClick={() => setHintsShown((h) => h + 1)}
+                disabled={attempts < 2}
+                className="rounded-lg border border-amber/40 bg-amber-50 px-3.5 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                💡 查看提示 {hintsShown + 1}/{hints.length}
+              </button>
+            ) : (
+              <span className="text-[11px] text-ink-soft">提示已全部显示,再想想怎么改</span>
+            )}
+          </div>
+          {attempts < 2 && (
+            <p className="mt-1.5 text-[11px] text-ink-soft">
+              再独立尝试 {2 - attempts} 次即可解锁提示——先自己想,学得更牢
+            </p>
+          )}
+          {hints.slice(0, hintsShown).map((h, i) => (
+            <div
+              key={i}
+              className="fade-up mt-2 rounded-xl border border-amber/30 bg-amber-50 px-3.5 py-2 text-xs leading-relaxed text-amber-800"
+            >
+              <span className="font-bold text-amber-700">提示 {i + 1}:</span> {h}
+            </div>
+          ))}
         </div>
       )}
 
