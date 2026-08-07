@@ -222,6 +222,61 @@ export default function CoursePlayer({ course }: { course: Course }) {
     if (first) goTo(first);
   }
 
+  /** 导出 Markdown 讲义:全量章节/步骤/代码/测验(含答案),便于离线阅读与打印 */
+  function exportMarkdown() {
+    const lines: string[] = [];
+    lines.push(`# ${courseState.title}`);
+    if (courseState.description) lines.push(`> ${courseState.description}`);
+    lines.push(
+      `${courseState.language} · ${courseState.level} · 约 ${courseState.estimatedMinutes} 分钟`
+    );
+    for (const ch of courseState.chapters) {
+      lines.push("", `## ${ch.title}`);
+      for (const s of ch.steps) {
+        lines.push("", `### ${s.title}(${STEP_BADGE[s.type] ?? s.type})`);
+        if (s.bodyMarkdown) lines.push(s.bodyMarkdown);
+        if (s.type === "challenge") {
+          if (s.seedBefore) lines.push("", "```", s.seedBefore, "```");
+          if (s.starterCode)
+            lines.push("", `\`\`\`${s.language ?? ""}`, s.starterCode, "```");
+          if (s.seedAfter) lines.push("", "```", s.seedAfter, "```");
+          if (s.hints?.length)
+            lines.push(
+              "",
+              "**提示(按需查看):**",
+              ...s.hints.map((h) => `- ${h}`)
+            );
+        }
+        if (s.type === "quiz" && s.questions?.length) {
+          s.questions.forEach((q, qi) => {
+            lines.push(
+              "",
+              `${qi + 1}. ${q.question}`,
+              ...q.options.map((o, oi) =>
+                oi === q.correctIndex ? `   ✓ ${o}` : `   ${o}`
+              )
+            );
+          });
+        }
+      }
+    }
+    try {
+      const blob = new Blob([lines.join("\n")], {
+        type: "text/markdown;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${courseState.title}.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      // 下载失败静默处理
+    }
+  }
+
   const step = findStep(courseState, currentId);
   const doneCount = Object.values(progress).filter(Boolean).length;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
@@ -360,6 +415,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
           setMobileNav(false);
         }}
         onClearProgress={clearAllProgress}
+        onExportMd={exportMarkdown}
         className={`fixed inset-y-0 left-0 z-40 -translate-x-full transition-transform duration-300 lg:static lg:top-14 lg:h-[calc(100vh-3.5rem)] lg:translate-x-0 ${
           mobileNav ? "translate-x-0" : ""
         }`}

@@ -17,6 +17,7 @@ interface Props {
   progress: ProgressMap;
   onNavigate: (stepId: string) => void;
   onClearProgress: () => void;
+  onExportMd?: () => void;
   className?: string;
 }
 
@@ -26,6 +27,7 @@ export default function CourseSidebar({
   progress,
   onNavigate,
   onClearProgress,
+  onExportMd,
   className,
 }: Props) {
   const activeRef = useRef<HTMLButtonElement>(null);
@@ -175,7 +177,16 @@ export default function CourseSidebar({
               </div>
             ))}
       </nav>
-      <div className="mt-6 border-t border-line pt-4">
+      <div className="mt-6 space-y-1 border-t border-line pt-4">
+        {onExportMd && (
+          <button
+            onClick={onExportMd}
+            className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
+            title="导出 Markdown 讲义,可离线阅读/打印"
+          >
+            ⬇ 导出讲义(.md)
+          </button>
+        )}
         <button
           onClick={onClearProgress}
           className="w-full rounded-lg px-2 py-1.5 text-left text-xs text-ink-soft transition hover:bg-red-soft hover:text-red"
