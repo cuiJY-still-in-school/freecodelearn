@@ -1030,7 +1030,11 @@ export default function HomePage() {
                     </span>
                   )}
                   <span className="text-xs text-ink-soft">
-                    {c.pendingChapters > 0 ? "章节生成中 · " : ""}
+                    {c.pendingChapters > 0
+                      ? c.generationError
+                        ? "章节生成失败 · "
+                        : "章节生成中 · "
+                      : ""}
                     {c.totalChapters} 章 · {c.stepCount} 步
                   </span>
                 </div>

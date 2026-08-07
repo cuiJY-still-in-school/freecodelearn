@@ -190,11 +190,17 @@ export default function ChallengeRunner({
         };
         for (const c of cmds) {
           lines.push(`$ ${c}`);
-          const r = await term.exec(c, extra);
-          if (r?.stdout?.trim()) lines.push(r.stdout.replace(/\n$/, ""));
-          if (r?.stderr) lines.push(r.stderr);
-          if (r?.error) lines.push(r.error);
-          if (r && r.code) lines.push(`(exit code ${r.code})`);
+          try {
+            const r = await term.exec(c, extra);
+            if (r?.stdout?.trim()) lines.push(r.stdout.replace(/\n$/, ""));
+            if (r?.stderr) lines.push(r.stderr);
+            if (r?.error) lines.push(r.error);
+            if (r && r.code) lines.push(`(exit code ${r.code})`);
+          } catch (err) {
+            lines.push(
+              `(命令执行出错:${err instanceof Error ? err.message : String(err)})`
+            );
+          }
         }
         termOut = lines.join("\n");
         setTerminalOutput(termOut);
@@ -315,9 +321,13 @@ ${HARNESS_SUFFIX}
           </button>
           <button
             onClick={run}
-            disabled={running}
+            disabled={running || !tests}
             className="rounded-lg bg-ink px-4 py-1.5 text-xs font-semibold text-bg transition hover:bg-accent disabled:opacity-50"
-            title={`快捷键:${isMac ? "Cmd" : "Ctrl"} + Enter`}
+            title={
+              tests
+                ? `快捷键:${isMac ? "Cmd" : "Ctrl"} + Enter`
+                : "本题没有自动判题,直接阅读并完成下面的操作即可"
+            }
           >
             {running ? "运行中..." : `运行测试 ${runHint}`}
           </button>

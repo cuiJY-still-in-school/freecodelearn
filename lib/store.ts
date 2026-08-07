@@ -32,6 +32,8 @@ export interface CourseMeta {
   totalChapters: number;
   /** 后台待生成章节数 */
   pendingChapters: number;
+  /** 后台章节生成是否出错(需重试) */
+  generationError?: boolean;
 }
 
 async function ensureDirs() {
@@ -131,6 +133,7 @@ export function toMeta(course: Course): CourseMeta {
     chapterCount: course.chapters.length,
     totalChapters: course.chapters.length + pending,
     pendingChapters: pending,
+    generationError: Boolean(course.generationError),
   };
 }
 
