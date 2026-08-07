@@ -72,8 +72,20 @@ function Confetti() {
 }
 
 export default function CoursePlayer({ course }: { course: Course }) {
-  const flat = useMemo(() => flattenSteps(course), [course]);
-  const total = countSteps(course);
+  // 渐进生成:课程可能仍在后台生成剩余章节,轮询刷新本地状态
+  const [courseState, setCourseState] = useState<Course>(course);
+  const [genTick, setGenTick] = useState(0);
+  const pending = courseState.pendingChapters ?? 0;
+
+  const flat = useMemo(() => flattenSteps(courseState), [courseState]);
+  // 总步骤数以大纲为准(含未生成章节),进度条不因后台生成而跳动
+  const total = useMemo(() => {
+    const o = courseState.outline;
+    if (o && o.chapters.length > 0) {
+      return o.chapters.reduce((a, c) => a + c.steps.length, 0);
+    }
+    return countSteps(courseState);
+  }, [courseState]);
 
   const [currentId, setCurrentId] = useState<string>(() =>
     flat.length ? flat[0].step.id : firstStepId(course)
@@ -83,6 +95,33 @@ export default function CoursePlayer({ course }: { course: Course }) {
   const [appending, setAppending] = useState(false);
   const [appendMsg, setAppendMsg] = useState("");
   const [progress, setProgress] = useState<ProgressMap>({});
+
+  // 后台章节生成:进入课程页即触发一次,并轮询课程文件反映生成进度
+  useEffect(() => {
+    if ((course.pendingChapters ?? 0) <= 0) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      if (!alive) return;
+      try {
+        const c = await (await fetch(`/api/courses/${course.id}`)).json();
+        if (!alive || !c?.id) return;
+        setCourseState(c);
+        if ((c.pendingChapters ?? 0) > 0 || c.generationError) {
+          timer = setTimeout(poll, 5000);
+        }
+      } catch {
+        timer = setTimeout(poll, 8000);
+      }
+    };
+    fetch(`/api/courses/${course.id}/generate`, { method: "POST" }).catch(() => {});
+    poll();
+    return () => {
+      alive = false;
+      if (timer) clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course.id, genTick]);
 
   // 客户端挂载后按本地进度定位到第一个未完成步骤(SSR 阶段统一渲染第一步骤,避免 hydration mismatch)
   useEffect(() => {
@@ -100,9 +139,21 @@ export default function CoursePlayer({ course }: { course: Course }) {
   const [passedFlash, setPassedFlash] = useState(false);
   const [chapterFlash, setChapterFlash] = useState<{
     title: string;
-    nextId: string;
+    chapterIndex: number;
   } | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 章节横幅自动跳转:下一章已生成 → 2.5s 后进入;尚未生成 → 等轮询刷新后就绪再跳
+  useEffect(() => {
+    if (!chapterFlash) return;
+    const nextCh = courseState.chapters[chapterFlash.chapterIndex];
+    const firstOfNext = nextCh?.steps[0];
+    if (!firstOfNext || flashTimerRef.current) return;
+    flashTimerRef.current = setTimeout(() => {
+      setChapterFlash(null);
+      goTo(firstOfNext.id);
+    }, 2500);
+  }, [courseState, chapterFlash]);
 
   // 键盘 ←/→ 切换步骤(编辑器中不触发)
   useEffect(() => {
@@ -128,7 +179,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
     if (first) goTo(first);
   }
 
-  const step = findStep(course, currentId);
+  const step = findStep(courseState, currentId);
   const doneCount = Object.values(progress).filter(Boolean).length;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
   const isLast = currentId === (flat.length ? flat[flat.length - 1].step.id : "");
@@ -152,7 +203,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
         return next;
       });
       // 章节完成检测:本步完成后,若所在章节全部完成且还有下一章 → 章节完成横幅
-      const chapter = course.chapters.find((c) =>
+      const chapter = courseState.chapters.find((c) =>
         c.steps.some((s) => s.id === id)
       );
       if (!chapter) return false;
@@ -160,20 +211,20 @@ export default function CoursePlayer({ course }: { course: Course }) {
         (s) => progress[s.id] || s.id === id
       );
       if (!allDone) return false;
-      const ci = course.chapters.indexOf(chapter);
-      const nextChapter = course.chapters[ci + 1];
-      const firstOfNext = nextChapter?.steps[0];
-      if (!firstOfNext) return false;
+      const ci = courseState.chapters.indexOf(chapter);
+      // 下一章:优先看大纲(可能尚未生成,标题已在),看已生成章节列表判断是否就绪
+      const nextOutline = courseState.outline?.chapters[ci + 1];
+      const nextChapter = courseState.chapters[ci + 1];
+      if (!nextOutline && !nextChapter) return false;
       setPassedFlash(false);
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-      setChapterFlash({ title: nextChapter.title, nextId: firstOfNext.id });
-      flashTimerRef.current = setTimeout(() => {
-        setChapterFlash(null);
-        goTo(firstOfNext.id);
-      }, 2500);
+      setChapterFlash({
+        title: (nextOutline ?? nextChapter)!.title,
+        chapterIndex: ci + 1,
+      });
       return true;
     },
-    [course, progress]
+    [course, courseState, progress]
   );
 
   const unmark = useCallback(
@@ -198,10 +249,12 @@ export default function CoursePlayer({ course }: { course: Course }) {
 
   function jumpChapter() {
     if (!chapterFlash) return;
+    const nextCh = courseState.chapters[chapterFlash.chapterIndex];
+    const firstOfNext = nextCh?.steps[0];
+    if (!firstOfNext) return;
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-    const { nextId } = chapterFlash;
     setChapterFlash(null);
-    goTo(nextId);
+    goTo(firstOfNext.id);
   }
 
   // 通过后:标记完成 → 显示成功横幅 → 2 秒后自动进入下一步(可手动立即进入)
@@ -228,8 +281,8 @@ export default function CoursePlayer({ course }: { course: Course }) {
     goTo(next);
   }
 
-  const next = nextStepId(course, currentId);
-  const prev = prevStepId(course, currentId);
+  const next = nextStepId(courseState, currentId);
+  const prev = prevStepId(courseState, currentId);
 
   function celebrate() {
     setCelebrating(true);
@@ -251,7 +304,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
         />
       )}
       <CourseSidebar
-        course={course}
+        course={courseState}
         currentStepId={currentId}
         progress={progress}
         onNavigate={(id) => {
@@ -300,8 +353,8 @@ export default function CoursePlayer({ course }: { course: Course }) {
         <div className="relative mx-auto max-w-3xl px-6 py-10">
           {celebrating && <Confetti />}
 
-          {/* 课程完成横幅 */}
-          {isLast && isDone && !next && (
+          {/* 课程完成横幅:全部章节生成完且学完 */}
+          {isLast && isDone && !next && pending === 0 && (
             <div className="fade-up relative mb-8 overflow-hidden rounded-2xl border border-green/30 bg-green-soft p-6 text-center">
               <span className="pop inline-block text-4xl">🎉</span>
               <h2 className="mt-2 font-serif text-2xl font-bold text-green">
@@ -356,23 +409,63 @@ export default function CoursePlayer({ course }: { course: Course }) {
             </div>
           )}
 
-          {/* 章节完成横幅 */}
-          {chapterFlash && (
-            <div className="fade-up mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent-soft px-5 py-4">
-              <span className="text-sm font-semibold text-accent">
-                🎉 本章完成!即将进入下一章《{chapterFlash.title}》
-              </span>
-              <button
-                onClick={jumpChapter}
-                className="rounded-xl bg-accent px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                进入下一章 →
-              </button>
-            </div>
-          )}
+          {/* 章节完成横幅:下一章已生成 → 自动进入;未生成 → 等待后台补齐 */}
+          {chapterFlash &&
+            (() => {
+              const nextCh = courseState.chapters[chapterFlash.chapterIndex];
+              const ready = Boolean(nextCh?.steps[0]);
+              return (
+                <div className="fade-up mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent-soft px-5 py-4">
+                  {ready ? (
+                    <>
+                      <span className="text-sm font-semibold text-accent">
+                        🎉 本章完成!即将进入下一章《{chapterFlash.title}》
+                      </span>
+                      <button
+                        onClick={jumpChapter}
+                        className="rounded-xl bg-accent px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                      >
+                        进入下一章 →
+                      </button>
+                    </>
+                  ) : (
+                    <span className="flex items-center gap-2 text-sm font-semibold text-accent">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+                      下一章《{chapterFlash.title}》正在生成,完成后自动进入
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
           <h1 className="mb-8 font-serif text-3xl font-bold tracking-tight">
             {step.title}
           </h1>
+
+          {/* 后台章节生成中提示 */}
+          {pending > 0 && !chapterFlash && (
+            <div className="fade-up mb-6 flex items-center gap-2.5 rounded-xl border border-accent/30 bg-accent-soft px-4 py-2.5 text-xs text-accent">
+              <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+              <span>
+                课程仍在后台生成:剩余 <b>{pending}</b> 章({courseState.chapters.length + pending} 章共
+                {total} 步)将陆续自动出现
+              </span>
+            </div>
+          )}
+
+          {/* 后台生成失败:可重试 */}
+          {courseState.generationError && (
+            <div className="fade-up mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-soft px-4 py-3 text-sm text-red">
+              <span className="min-w-0 flex-1 break-words">
+                {courseState.generationError}
+              </span>
+              <button
+                onClick={() => setGenTick((g) => g + 1)}
+                className="shrink-0 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red transition hover:bg-red/10"
+              >
+                ↻ 重试生成
+              </button>
+            </div>
+          )}
 
           {step.bodyMarkdown && (
             <div className="mb-8">
@@ -391,8 +484,8 @@ export default function CoursePlayer({ course }: { course: Course }) {
                 language={step.language}
                 seedBefore={step.seedBefore}
                 seedAfter={step.seedAfter}
-                allowedCommands={course.allowedCommands}
-                blockedCommands={course.blockedCommands}
+                allowedCommands={courseState.allowedCommands}
+                blockedCommands={courseState.blockedCommands}
                 onPassed={() => handlePassed("passed")}
               />
               {!step.tests && (

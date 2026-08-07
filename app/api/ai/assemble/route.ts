@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { assembleCourse } from "@/lib/ai";
-import type { CourseOutline } from "@/lib/ai";
+import type { CourseOutline } from "@/lib/types";
 import type { Step } from "@/lib/types";
 
 export async function POST(req: Request) {

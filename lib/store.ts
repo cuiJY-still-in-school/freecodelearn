@@ -28,6 +28,10 @@ export interface CourseMeta {
   createdAt: string;
   stepCount: number;
   chapterCount: number;
+  /** 总章节数(含后台待生成章节) */
+  totalChapters: number;
+  /** 后台待生成章节数 */
+  pendingChapters: number;
 }
 
 async function ensureDirs() {
@@ -113,6 +117,7 @@ export async function getSettings(): Promise<AISettings | null> {
 
 export function toMeta(course: Course): CourseMeta {
   const stepCount = course.chapters.reduce((a, c) => a + c.steps.length, 0);
+  const pending = course.pendingChapters ?? 0;
   return {
     id: course.id,
     title: course.title,
@@ -124,6 +129,8 @@ export function toMeta(course: Course): CourseMeta {
     createdAt: course.createdAt,
     stepCount,
     chapterCount: course.chapters.length,
+    totalChapters: course.chapters.length + pending,
+    pendingChapters: pending,
   };
 }
 

@@ -127,7 +127,6 @@ export default function ChallengeRunner({
   const isMac =
     typeof navigator !== "undefined" &&
     /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || "");
-  const modLabel = isMac ? "⌘" : "Ctrl";
   const runHint = isMac ? "⌘⏎" : "Ctrl+⏎";
 
   const handleMessage = useCallback(

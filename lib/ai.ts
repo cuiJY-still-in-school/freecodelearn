@@ -1,4 +1,11 @@
-import type { Chapter, Course, Step } from "./types";
+import type {
+  Chapter,
+  Course,
+  CourseOutline,
+  OutlineChapter,
+  OutlineStep,
+  Step,
+} from "./types";
 import { getSettings, newCourseId, saveCourse } from "./store";
 
 export interface GenerateInput {
@@ -15,35 +22,6 @@ export interface GenerateInput {
   referenceDoc?: string;
   /** 参考已有课程的结构摘要(用于风格/结构定制) */
   referenceCourse?: string;
-}
-
-export interface OutlineStep {
-  title: string;
-  type: "lesson" | "challenge" | "quiz";
-  brief: string;
-}
-
-export interface OutlineChapter {
-  title: string;
-  description: string;
-  steps: OutlineStep[];
-}
-
-export interface CourseOutline {
-  title: string;
-  description: string;
-  topic: string;
-  level: Course["level"];
-  language: string;
-  estimatedMinutes: number;
-  chapters: OutlineChapter[];
-  /** 参考文档全文(透传给章节生成) */
-  referenceDoc?: string;
-  /** 联网检索到的资料摘要(透传给章节生成) */
-  researchNotes?: string;
-  /** 终端练习白名单扩展/禁用(仅命令行类课程,AI 按课程需要声明) */
-  allowedCommands?: string[];
-  blockedCommands?: string[];
 }
 
 const SYSTEM_PROMPT = `你是课程设计专家,擅长设计 freeCodeCamp 风格的循序渐进编程课程。`;
@@ -79,9 +57,14 @@ JSON 结构:
 5. 挑战要小步渐进:像 freeCodeCamp 的 step 系列,每个挑战只引入一个新概念、只改一处小地方(如「给 h1 加一个 class」「给数组排序并赋值」),绝不要一个大挑战塞三个知识点
 6. challenge 步骤的 brief 必须写清楚:改哪里、改成什么(精确到元素/函数/值),让内容作者无需再猜
 7. 每章 quiz 考察「理解」而非「记忆」:用新的小例子检验概念是否真懂(如把本章讲的语法换个场景提问)
-8. 章节数由你根据「学习目标」与主题复杂度自定(3-10 章):目标宏大、内容面广则 5-10 章;入门小目标则 3-4 章;不注水,每章都要有明确的构建成果
+8. 章节数遵循「最小可用版本」预算制,由学习目标与主题复杂度共同决定(3-8 章):
+   - 先划出完成目标「不可再减」的核心知识块序列,每个知识块 = 1 章;环境搭建、基础概念等铺垫内容合并进第 1 章,不单独成章;第 1 章结束时项目必须可运行、可见成果(最小可用版本)
+   - 章节必须全部是构建阶段(像连续剧),不允许任何「注水」章;若目标只需 3 章就不要硬凑 6 章
+   - 目标宏大、技能面广(如「全栈开发」「爬虫+数据可视化」)→ 5-8 章;目标明确、入门小目标(如「给网页加一个按钮动效」)→ 3-4 章;中间情况 4-6 章
+   - 难度越高每章可越厚,但每章仍须是独立的构建成果
 9. 用户提供「学习目标」时,课程围绕目标设计:学完能做什么、覆盖哪些关键技能;目标决定章节数与步骤
 10. 命令行/Shell 类课程(如 Git、Docker、MySQL):allowedCommands 填写练习中需要真实执行、但不在系统默认安全白名单里的命令(如 mysql、docker、psql、npx);默认白名单已有 git/python/node/npm/ls/cat/mkdir/cd/echo/pwd/touch/grep/find/head/tail/cp/clear/whoami/uname/tree/pip,不用重复列出;blockedCommands 用于禁用默认允许但你判断不适合本课程练习的命令(如 curl、cp),没有则省略;非命令行课程两者都省略
+11. estimatedMinutes 与章节数严格对齐:每章学习时长 8-15 分钟,总时长 = 各章时长之和(不要脱离章节数凭空写总时长);课程体量越大单章分钟数取上限,越小取下限
 
 参考资料(必须遵守):
 - 如果提供了「参考文档」:课程内容必须取材自该文档(文档的技术栈、术语、示例、工作流),大纲先覆盖文档核心内容再扩展
@@ -755,10 +738,20 @@ export async function appendChapter(
 
 /* ---------- 组装保存 ---------- */
 
+/**
+ * 组装并保存课程。
+ * 渐进生成模式:chapters 只含已生成的章节(通常仅第 1 章),课程会保存 outline 与 pendingChapters,
+ * 由后台 /api/courses/[id]/generate 逐章补齐;全部章节就绪后保存并移除 outline。
+ */
 export async function assembleCourse(
   outline: CourseOutline,
   chapters: Step[][]
 ): Promise<Course> {
+  const doneCount = chapters.length;
+  if (doneCount === 0) throw new Error("没有可保存的章节");
+  if (doneCount > outline.chapters.length) {
+    throw new Error("章节数量超出大纲");
+  }
   const course: Course = {
     id: newCourseId(),
     title: outline.title,
@@ -768,7 +761,7 @@ export async function assembleCourse(
     language: outline.language,
     estimatedMinutes: outline.estimatedMinutes,
     createdAt: new Date().toISOString(),
-    chapters: outline.chapters.map((oc, i): Chapter => {
+    chapters: outline.chapters.slice(0, doneCount).map((oc, i): Chapter => {
       let steps = chapters[i];
       if (!steps || steps.length === 0) {
         throw new Error(`第 ${i + 1} 章内容缺失`);
@@ -784,6 +777,28 @@ export async function assembleCourse(
     allowedCommands: outline.allowedCommands,
     blockedCommands: outline.blockedCommands,
   };
+  if (doneCount < outline.chapters.length) {
+    // 渐进生成中:保存大纲与剩余章节数,后台逐章生成后移除
+    course.pendingChapters = outline.chapters.length - doneCount;
+    course.outline = outline;
+  }
+  await saveCourse(course);
+  return course;
+}
+
+/** 把后台生成的章节追加进课程并保存;生成完毕时清掉 outline 减小文件 */
+export async function appendGeneratedChapters(
+  course: Course,
+  newChapters: Chapter[]
+): Promise<Course> {
+  course.chapters.push(...newChapters);
+  if (newChapters.length >= (course.pendingChapters ?? 0)) {
+    course.pendingChapters = 0;
+    delete course.outline;
+    delete course.generationError;
+  } else {
+    course.pendingChapters = (course.pendingChapters ?? 0) - newChapters.length;
+  }
   await saveCourse(course);
   return course;
 }

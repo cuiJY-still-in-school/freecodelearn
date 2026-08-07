@@ -32,23 +32,23 @@
 
 | 平台 | 文件 | 安装方法 |
 | --- | --- | --- |
-| Linux | `FreeCodeLearn-1.1.0.AppImage` | 见下方 A 或 B |
-| Linux | `freecodelearn_1.1.0_amd64.deb` | `sudo apt install ./freecodelearn_1.1.0_amd64.deb` |
-| Windows | `FreeCodeLearn Setup 1.1.0.exe` | 双击运行,按向导安装 |
+| Linux | `FreeCodeLearn-1.2.0.AppImage` | 见下方 A 或 B |
+| Linux | `freecodelearn_1.2.0_amd64.deb` | `sudo apt install ./freecodelearn_1.2.0_amd64.deb` |
+| Windows | `FreeCodeLearn Setup 1.2.0.exe` | 双击运行,按向导安装 |
 
 **Linux AppImage 两种运行方式:**
 
 - A. 直接运行(需要 FUSE 支持):
 
   ```bash
-  chmod +x FreeCodeLearn-1.1.0.AppImage
-  ./FreeCodeLearn-1.1.0.AppImage
+  chmod +x FreeCodeLearn-1.2.0.AppImage
+  ./FreeCodeLearn-1.2.0.AppImage
   ```
 
 - B. 系统没有 FUSE 时,用解包模式运行:
 
   ```bash
-  ./FreeCodeLearn-1.1.0.AppImage --appimage-extract-and-run
+  ./FreeCodeLearn-1.2.0.AppImage --appimage-extract-and-run
   ```
 
 **数据目录:** 课程与设置保存在 `~/.config/freecodelearn/data`(桌面版内嵌服务器自带存储,不依赖任何外部服务)。可用环境变量 `FCL_DATA_DIR` 覆盖目录。

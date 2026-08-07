@@ -141,7 +141,24 @@ export default function CourseSidebar({
               })}
             </div>
           );
-        })}      </nav>
+        })}
+        {/* 后台待生成章节占位 */}
+        {(course.pendingChapters ?? 0) > 0 &&
+          course.outline?.chapters
+            .slice(course.chapters.length)
+            .map((oc, i) => (
+              <div
+                key={`pending-${i}`}
+                className="mb-1.5 flex items-center gap-2 rounded-lg border border-dashed border-line px-2 py-1.5 text-[13px] text-ink-soft/50"
+              >
+                <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+                <span className="truncate">
+                  {course.chapters.length + i + 1} · {oc.title}
+                </span>
+                <span className="ml-auto shrink-0 text-[10px]">生成中</span>
+              </div>
+            ))}
+      </nav>
       <div className="mt-6 border-t border-line pt-4">
         <button
           onClick={onClearProgress}

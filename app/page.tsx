@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CourseMeta } from "@/lib/store";
-import type { CourseOutline } from "@/lib/ai";
-import type { Step } from "@/lib/types";
+import type { CourseOutline } from "@/lib/types";
 import { loadProgress } from "@/lib/progress";
 
 const LEVEL_LABEL: Record<string, string> = {
@@ -29,13 +28,8 @@ function coverIndex(id: string): number {
   return h % COVER_GRADIENTS.length;
 }
 
-interface ChapterState {
-  status: "pending" | "working" | "done" | "error";
-  steps?: Step[];
-  error?: string;
-}
-
 export default function HomePage() {
+
   const router = useRouter();
   const [courses, setCourses] = useState<CourseMeta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +51,6 @@ export default function HomePage() {
   const [phase, setPhase] = useState<"input" | "researching" | "preview" | "generating" | "done">("input");
   const [outline, setOutline] = useState<CourseOutline | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [chapterStates, setChapterStates] = useState<ChapterState[]>([]);
   const [researchNote, setResearchNote] = useState("");
 
   // 联网检索阶段的真实进度:计划 → 逐词检索
@@ -275,92 +268,37 @@ export default function HomePage() {
 
   async function confirmOutline() {
     if (!outline) return;
-    await generateAll(outline);
-  }
-
-  async function generateAll(outlineData: CourseOutline) {
     setFormError("");
-    assemblingRef.current = false;
-    setPhase("generating");
-    const states = outlineData.chapters.map(() => ({ status: "working" as const }));
-    setChapterStates(states);
-
-    await Promise.all(
-      outlineData.chapters.map(async (_, i) => {
-        try {
-          const res = await fetch("/api/ai/chapter", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ outline: outlineData, chapterIndex: i }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error ?? "生成失败");
-          setChapterStates((prev) =>
-            prev.map((s, si) => (si === i ? { status: "done", steps: data.steps } : s))
-          );
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "生成失败";
-          setChapterStates((prev) =>
-            prev.map((s, si) => (si === i ? { status: "error", error: msg } : s))
-          );
-        }
-      })
-    );
-    // 保存与跳转由下面的 useEffect 统一处理(含重试后全部成功的场景)
+    try {
+      await generateAll(outline);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "课程生成失败");
+      setPhase("preview");
+    }
   }
 
-  // 全部章节就绪后自动组装保存(首轮生成与章节重试共用此路径)
-  const assemblingRef = useRef(false);
-  const allDone = chapterStates.every((s) => s.status === "done");
-  useEffect(() => {
-    if (phase !== "generating" || !outline || !allDone || chapterStates.length === 0) return;
-    if (assemblingRef.current) return;
-    assemblingRef.current = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/ai/assemble", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            outline,
-            chapters: chapterStates.map((s) => s.steps),
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "保存失败");
-        setPhase("done");
-        await refreshCourses();
-        router.push(`/courses/${data.id}`);
-      } catch (err) {
-        // 保存失败:允许再次触发,并回到大纲确认页让错误可见
-        assemblingRef.current = false;
-        setFormError(err instanceof Error ? err.message : "课程保存失败");
-        setPhase("preview");
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, outline, allDone, chapterStates]);
+  // 只生成第一章即进入课程(约 30-60 秒);其余章节在课程页后台逐章生成,边学边补
+  async function generateAll(outlineData: CourseOutline) {
+    setPhase("generating");
+    const res = await fetch("/api/ai/chapter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ outline: outlineData, chapterIndex: 0 }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "第一章生成失败");
 
-  async function retryChapter(i: number) {
-    if (!outline) return;
-    setChapterStates((prev) => prev.map((s, si) => (si === i ? { status: "working" } : s)));
-    try {
-      const res = await fetch("/api/ai/chapter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outline, chapterIndex: i }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "生成失败");
-      setChapterStates((prev) =>
-        prev.map((s, si) => (si === i ? { status: "done", steps: data.steps } : s))
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "生成失败";
-      setChapterStates((prev) =>
-        prev.map((s, si) => (si === i ? { status: "error", error: msg } : s))
-      );
-    }
+    const saveRes = await fetch("/api/ai/assemble", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ outline: outlineData, chapters: [data.steps] }),
+    });
+    const saved = await saveRes.json();
+    if (!saveRes.ok) throw new Error(saved.error ?? "课程保存失败");
+
+    setPhase("done");
+    await refreshCourses();
+    router.push(`/courses/${saved.id}`);
   }
 
   async function deleteCourse(id: string, e: React.MouseEvent) {
@@ -375,10 +313,6 @@ export default function HomePage() {
     });
     await refreshCourses();
   }
-
-  const failedCount = chapterStates.filter((s) => s.status === "error").length;
-  const doneCount = chapterStates.filter((s) => s.status === "done").length;
-  const totalCount = chapterStates.length;
 
   // ---------- .fcl 导出 / 导入 ----------
 
@@ -804,120 +738,56 @@ export default function HomePage() {
               </button>
             </div>
             <p className="mt-3 text-center text-xs text-ink-soft">
-              确认后将并行生成全部章节(通常 1-2 分钟),中途可对失败章节单独重试
+              确认后先生成第一章(约 30-60 秒)即可开始学习,其余 {outline.chapters.length - 1} 章在你学习的同时自动生成
             </p>
           </div>
         </div>
       )}
 
-      {/* 并行生成 */}
+      {/* 生成第一章 */}
       {phase === "generating" && outline && (
         <div className="fade-up mx-auto max-w-3xl">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="mb-1 font-serif text-2xl font-bold">
-                {allDone ? "课程生成完成" : "正在编写《" + outline.title + "》"}
-              </h2>
-              <p className="text-sm text-ink-soft">
-                {allDone
-                  ? "所有章节已完成,正在保存..."
-                  : failedCount > 0
-                    ? `${failedCount} 章生成失败,可单独重试`
-                    : "各章节并行生成中,通常 1-2 分钟"}
-              </p>
-            </div>
-            {failedCount > 0 && (
-              <button
-                onClick={() => {
-                  assemblingRef.current = false;
-                  setOutline(null);
-                  setPhase("input");
-                }}
-                className="rounded-xl border border-line px-4 py-2 text-xs font-medium text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
-              >
-                ← 放弃,返回修改
-              </button>
-            )}
-          </div>
-
-          {/* 总进度 */}
-          <div className="mb-6 rounded-2xl border border-line bg-card p-5 shadow-sm">
-            <div className="mb-2 flex items-center justify-between text-xs">
-              <span className="font-medium text-ink">课程完成进度</span>
-              <span className="text-ink-soft">
-                {doneCount}/{totalCount} 章
-                {failedCount > 0 && (
-                  <span className="ml-2 text-red">{failedCount} 章失败</span>
-                )}
+          <div className="rounded-2xl border border-line bg-card p-8 shadow-sm">
+            <div className="flex items-start gap-4">
+              <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft">
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
               </span>
-            </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-line">
-              <div
-                className="h-full rounded-full bg-accent transition-all duration-500"
-                style={{
-                  width: `${totalCount ? (doneCount / totalCount) * 100 : 0}%`,
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {outline.chapters.map((c, ci) => {
-              const st = chapterStates[ci];
-              return (
-                <div
-                  key={ci}
-                  className="rounded-2xl border border-line bg-card p-5 shadow-sm transition"
-                >
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-serif text-lg font-bold">
-                      {ci + 1}. {c.title}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      {st.status === "working" && (
-                        <span className="flex items-center gap-1.5 text-xs text-ink-soft">
-                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
-                          编写中...
-                        </span>
-                      )}
-                      {st.status === "done" && (
-                        <span className="pop rounded-full bg-green-soft px-3 py-1 text-xs font-medium text-green">
-                          ✓ {st.steps?.length} 个步骤
-                        </span>
-                      )}
-                      {st.status === "error" && (
-                        <button
-                          onClick={() => retryChapter(ci)}
-                          className="rounded-full border border-red-200 bg-red-soft px-3 py-1 text-xs font-medium text-red transition hover:bg-red/10"
-                        >
-                          ↻ 重试
-                        </button>
-                      )}
-                      {st.status === "pending" && (
-                        <span className="text-xs text-ink-soft">等待中</span>
-                      )}
-                    </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="font-serif text-xl font-bold">
+                  正在生成第一章《{outline.chapters[0]?.title}》
+                </h2>
+                <p className="mt-1 text-sm text-ink-soft">
+                  共 {outline.chapters.length} 章 · 第一章完成后立即开始学习,其余{" "}
+                  {outline.chapters.length - 1} 章会在学习过程中自动生成
+                </p>
+                {formError && (
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-soft px-4 py-3 text-sm text-red">
+                    {formError}
                   </div>
-                  {st.status === "error" && st.error && (
-                    <p className="mt-2 text-xs text-red">{st.error}</p>
-                  )}
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {c.steps.map((s, si) => (
+                )}
+                <div className="mt-5 space-y-1.5">
+                  {outline.chapters.map((c, ci) => (
+                    <div key={ci} className="flex items-center gap-2 text-xs">
                       <span
-                        key={si}
-                        className={`h-1.5 rounded-full transition-all duration-500 ${
-                          st.status === "done"
-                            ? "w-6 bg-green/60"
-                            : st.status === "working"
-                              ? "pulse-dot w-6 bg-accent/40"
-                              : "w-6 bg-line"
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] ${
+                          ci === 0
+                            ? "bg-accent-soft text-accent"
+                            : "bg-bg-subtle text-ink-soft/50"
                         }`}
-                      />
-                    ))}
-                  </div>
+                      >
+                        {ci === 0 ? "●" : "○"}
+                      </span>
+                      <span className="truncate">{c.title}</span>
+                      <span className="ml-auto shrink-0 text-ink-soft/60">
+                        {ci === 0
+                          ? "正在生成..."
+                          : "学习时自动生成"}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1048,7 +918,8 @@ export default function HomePage() {
                     </span>
                   )}
                   <span className="text-xs text-ink-soft">
-                    {c.chapterCount} 章 · {c.stepCount} 步
+                    {c.pendingChapters > 0 ? "章节生成中 · " : ""}
+                    {c.totalChapters} 章 · {c.stepCount} 步
                   </span>
                 </div>
                 <h3 className="font-serif text-lg font-bold transition group-hover:text-accent">

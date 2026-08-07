@@ -59,6 +59,36 @@ export interface Chapter {
   steps: Step[];
 }
 
+/** 大纲中的单个步骤(确认阶段与生成阶段共用) */
+export interface OutlineStep {
+  title: string;
+  type: "lesson" | "challenge" | "quiz";
+  brief: string;
+}
+
+export interface OutlineChapter {
+  title: string;
+  description: string;
+  steps: OutlineStep[];
+}
+
+export interface CourseOutline {
+  title: string;
+  description: string;
+  topic: string;
+  level: Course["level"];
+  language: string;
+  estimatedMinutes: number;
+  chapters: OutlineChapter[];
+  /** 参考文档全文(透传给章节生成) */
+  referenceDoc?: string;
+  /** 联网检索到的资料摘要(透传给章节生成) */
+  researchNotes?: string;
+  /** 终端练习白名单扩展/禁用(仅命令行类课程,AI 按课程需要声明) */
+  allowedCommands?: string[];
+  blockedCommands?: string[];
+}
+
 export interface Course {
   id: string;
   title: string;
@@ -73,6 +103,12 @@ export interface Course {
   allowedCommands?: string[];
   /** 终端练习白名单禁用(课程声明的不允许执行命令) */
   blockedCommands?: string[];
+  /** 尚未生成的章节数(渐进生成中):>0 时大纲已保存在 outline 字段,供后台逐章生成 */
+  pendingChapters?: number;
+  /** 后台生成失败信息(用户可重试),生成成功后清空 */
+  generationError?: string;
+  /** 课程大纲(仅渐进生成中保留,全部生成完成后移除,减小文件体积) */
+  outline?: CourseOutline;
 }
 
 export function flattenSteps(course: Course): { chapter: Chapter; step: Step }[] {
