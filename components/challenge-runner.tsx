@@ -98,6 +98,7 @@ export default function ChallengeRunner({
     if (!persistKey) return;
     try {
       const saved = localStorage.getItem(`fcl-editor-${persistKey}`);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 挂载后一次性恢复持久化代码,仅一次
       if (saved != null) setCode(saved);
     } catch {
       // 存储不可用时静默跳过

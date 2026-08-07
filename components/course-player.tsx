@@ -104,16 +104,14 @@ export default function CoursePlayer({ course }: { course: Course }) {
   // 间隔复习模式:到期题目合成为一次复习测验
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewTick, setReviewTick] = useState(0);
-  const reviewItems = useMemo(() => {
-    const items: { key: string; question: QuizQuestion }[] = [];
-    for (const key of dueReviewKeys(course.id, progress)) {
-      const stepId = key.slice(0, key.lastIndexOf(":"));
-      const st = flat.find((f) => f.step.id === stepId);
-      const q = st?.step.questions?.[Number(key.slice(key.lastIndexOf(":") + 1))];
-      if (q) items.push({ key, question: q });
-    }
-    return items;
-  }, [course.id, progress, flat, reviewTick]);
+  const reviewItems: { key: string; question: QuizQuestion }[] = [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reviewTick 仅用于复习完成后触发重算
+  for (const key of dueReviewKeys(course.id, progress)) {
+    const stepId = key.slice(0, key.lastIndexOf(":"));
+    const st = flat.find((f) => f.step.id === stepId);
+    const q = st?.step.questions?.[Number(key.slice(key.lastIndexOf(":") + 1))];
+    if (q) reviewItems.push({ key, question: q });
+  }
 
   // 后台章节生成:进入课程页即触发一次,并轮询课程文件反映生成进度
   useEffect(() => {
