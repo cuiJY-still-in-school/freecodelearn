@@ -38,6 +38,8 @@ export default function HomePage() {
   const router = useRouter();
   const [courses, setCourses] = useState<CourseMeta[]>([]);
   const [loading, setLoading] = useState(true);
+  // 课程列表搜索
+  const [courseQuery, setCourseQuery] = useState("");
 
   // 表单
   const [topic, setTopic] = useState("");
@@ -987,6 +989,14 @@ export default function HomePage() {
               c,
               done: Object.values(loadProgress(c.id)).filter(Boolean).length,
             }))
+            .filter(({ c }) => {
+              const q = courseQuery.trim().toLowerCase();
+              if (!q) return true;
+              return (
+                c.title.toLowerCase().includes(q) ||
+                (c.language ?? "").toLowerCase().includes(q)
+              );
+            })
             .sort((x, y) => {
               const xDone = x.c.pendingChapters === 0 && x.c.stepCount > 0 && x.done >= x.c.stepCount ? 1 : 0;
               const yDone = y.c.pendingChapters === 0 && y.c.stepCount > 0 && y.done >= y.c.stepCount ? 1 : 0;
@@ -997,20 +1007,30 @@ export default function HomePage() {
         <>
         <div className="mb-5 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-serif text-2xl font-bold">课程列表</h2>
-          {!loading && courses.length > 0 && (
-            <span className="text-xs text-ink-soft">
-              共 {courses.length} 门
-              {(() => {
-                const doneCount = courseRows.filter(
-                  (r) =>
-                    r.c.pendingChapters === 0 &&
-                    r.c.stepCount > 0 &&
-                    r.done >= r.c.stepCount
-                ).length;
-                return doneCount > 0 ? ` · 已完成 ${doneCount} 门` : "";
-              })()}
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {courses.length > 0 && (
+              <input
+                value={courseQuery}
+                onChange={(e) => setCourseQuery(e.target.value)}
+                placeholder="搜索课程 / 语言..."
+                className="w-44 rounded-lg border border-line bg-card px-3 py-1.5 text-xs outline-none transition focus:border-accent"
+              />
+            )}
+            {!loading && courses.length > 0 && (
+              <span className="text-xs text-ink-soft">
+                共 {courses.length} 门
+                {(() => {
+                  const doneCount = courseRows.filter(
+                    (r) =>
+                      r.c.pendingChapters === 0 &&
+                      r.c.stepCount > 0 &&
+                      r.done >= r.c.stepCount
+                  ).length;
+                  return doneCount > 0 ? ` · 已完成 ${doneCount} 门` : "";
+                })()}
+              </span>
+            )}
+          </div>
         </div>
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
