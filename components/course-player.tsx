@@ -231,7 +231,11 @@ export default function CoursePlayer({ course }: { course: Course }) {
       // 下一章:优先看大纲(可能尚未生成,标题已在),看已生成章节列表判断是否就绪
       const nextOutline = courseState.outline?.chapters[ci + 1];
       const nextChapter = courseState.chapters[ci + 1];
-      if (!nextOutline && !nextChapter) return false;
+      if (!nextOutline && !nextChapter) {
+        // 整个课程学完(全部章节已生成):自动庆祝
+        if ((courseState.pendingChapters ?? 0) === 0) setCelebrating(true);
+        return false;
+      }
       setPassedFlash(false);
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
       setChapterFlash({

@@ -35,6 +35,10 @@ export async function POST(
       const oc = outline.chapters[idx];
       try {
         const steps = await generateChapter(outline, idx);
+        // 生成期间课程可能被用户删除:不再写回,防止「复活」
+        if (!(await getCourse(id))) {
+          return NextResponse.json({ status: "cancelled" });
+        }
         const chapter: Chapter = {
           id: `ch-${idx + 1}`,
           title: oc.title,

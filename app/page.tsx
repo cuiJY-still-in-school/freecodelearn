@@ -177,11 +177,18 @@ export default function HomePage() {
           setPhase("preview");
           setJustRestored(true);
         } else if (snap.phase === "researching") {
-          // 检索/大纲请求随页面离开中断:恢复后自动重跑
+          // 检索/大纲请求随页面离开中断:恢复后自动重跑;失败则回输入态展示错误,避免卡在转圈
           setPhase("researching");
           setJustRestored(true);
           window.setTimeout(() => {
-            runGeneration(snap.topic, snap.level).catch(() => {});
+            runGeneration(snap.topic, snap.level).catch((err: unknown) => {
+              setPhase("input");
+              setFormError(
+                err instanceof Error
+                  ? `恢复生成失败:${err.message}`
+                  : "恢复生成失败,请重新提交"
+              );
+            });
           }, 0);
         } else if (snap.phase === "generating" && snap.outline) {
           // 首章生成中断:回到确认页重新确认
@@ -831,7 +838,11 @@ export default function HomePage() {
               </button>
             </div>
             <p className="mt-3 text-center text-xs text-ink-soft">
-              确认后先生成第一章(约 30-60 秒)即可开始学习,其余 {outline.chapters.length - 1} 章在你学习的同时自动生成
+              确认后先生成第一章(约 30-60 秒)即可开始学习
+              {outline.chapters.length > 1
+                ? `,其余 ${outline.chapters.length - 1} 章在你学习的同时自动生成`
+                : "。"
+              }
             </p>
           </div>
         </div>
@@ -850,8 +861,11 @@ export default function HomePage() {
                   正在生成第一章《{outline.chapters[0]?.title}》
                 </h2>
                 <p className="mt-1 text-sm text-ink-soft">
-                  共 {outline.chapters.length} 章 · 第一章完成后立即开始学习,其余{" "}
-                  {outline.chapters.length - 1} 章会在学习过程中自动生成
+                  共 {outline.chapters.length} 章 · 第一章完成后立即开始学习
+                  {outline.chapters.length > 1
+                    ? `,其余 ${outline.chapters.length - 1} 章会在学习过程中自动生成`
+                    : "。"
+                  }
                 </p>
                 {formError && (
                   <div className="mt-3 rounded-xl border border-red-200 bg-red-soft px-4 py-3 text-sm text-red">
@@ -970,7 +984,7 @@ export default function HomePage() {
                 href={`/courses/${c.id}`}
                 className="group relative rounded-2xl border border-line bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md"
               >
-                <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition group-hover:opacity-100">
+                <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 max-sm:opacity-100">
                   <button
                     onClick={(e) => {
                       e.preventDefault();
