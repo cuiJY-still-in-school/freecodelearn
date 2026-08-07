@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { QuizQuestion } from "@/lib/types";
 
 interface Props {
@@ -59,6 +59,27 @@ export default function QuizView({
       0
     );
   }
+
+  // 键盘答题:1-9 选第一道未答之题的选项,Enter 提交
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (checked || shown.length === 0) return;
+      if (e.key === "Enter") {
+        if (allAnswered) check();
+        return;
+      }
+      const n = /^[1-9]$/.test(e.key) ? Number(e.key) : 0;
+      if (!n) return;
+      const qi = answers.findIndex((a) => a === null);
+      if (qi < 0) return;
+      const opts = shown[qi]?.options ?? [];
+      if (n <= opts.length)
+        setAnswers((prev) => prev.map((a, i) => (i === qi ? n - 1 : a)));
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 最新状态由闭包内的 check/answers 直接读取
+  });
 
   return (
     <div className="space-y-5" data-quiz-top>
@@ -149,8 +170,8 @@ export default function QuizView({
           </button>
           <span className="text-xs text-ink-soft">
             {allAnswered
-              ? ""
-              : `还需回答 ${shown.filter((_, i) => answers[i] === null).length} 题`}
+              ? "Enter 提交"
+              : `还需回答 ${shown.filter((_, i) => answers[i] === null).length} 题 · 数字键 1-9 选答案`}
           </span>
         </div>
       )}

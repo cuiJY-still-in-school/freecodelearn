@@ -322,6 +322,27 @@ export default function HomePage() {
     setPhase("preview");
   }
 
+  // 大纲微调:章节标题/删除/排序(生成尚未开始,可安全修改)
+  function patchOutlineChapter(ci: number, patch: Partial<CourseOutline["chapters"][number]>) {
+    setOutline((o) =>
+      o ? { ...o, chapters: o.chapters.map((c, i) => (i === ci ? { ...c, ...patch } : c)) } : o
+    );
+  }
+  function moveChapter(ci: number, dir: -1 | 1) {
+    setOutline((o) => {
+      if (!o) return o;
+      const chs = [...o.chapters];
+      const j = ci + dir;
+      if (j < 0 || j >= chs.length) return o;
+      [chs[ci], chs[j]] = [chs[j], chs[ci]];
+      return { ...o, chapters: chs };
+    });
+  }
+  function removeChapter(ci: number) {
+    if (!window.confirm("删除该章节后不可恢复,确认?")) return;
+    setOutline((o) => (o ? { ...o, chapters: o.chapters.filter((_, i) => i !== ci) } : o));
+  }
+
   // 参考课程:拉取详情,构造结构摘要供 AI 模仿
   async function selectRefCourse(id: string) {
     setRefCourseId(id);
@@ -795,12 +816,40 @@ export default function HomePage() {
             <div className="mt-6 space-y-4">
               {outline.chapters.map((c, ci) => (
                 <div key={ci} className="rounded-xl border border-line bg-bg-subtle/50 p-4">
-                  <h3 className="text-sm font-bold text-ink">
-                    {ci + 1}. {c.title}
-                  </h3>
-                  {c.description && (
-                    <p className="mt-0.5 text-xs text-ink-soft">{c.description}</p>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-ink-soft">{ci + 1}</span>
+                    <input
+                      value={c.title}
+                      onChange={(e) => patchOutlineChapter(ci, { title: e.target.value })}
+                      className="min-w-0 flex-1 rounded-lg border border-line bg-card px-2.5 py-1 text-sm font-bold text-ink outline-none transition focus:border-accent"
+                      aria-label={`第 ${ci + 1} 章标题`}
+                    />
+                    <button
+                      onClick={() => moveChapter(ci, -1)}
+                      disabled={ci === 0}
+                      className="shrink-0 rounded-lg border border-line px-2 py-1 text-xs text-ink-soft transition hover:bg-bg-subtle hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+                      title="上移章节"
+                    >↑</button>
+                    <button
+                      onClick={() => moveChapter(ci, 1)}
+                      disabled={ci === outline.chapters.length - 1}
+                      className="shrink-0 rounded-lg border border-line px-2 py-1 text-xs text-ink-soft transition hover:bg-bg-subtle hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+                      title="下移章节"
+                    >↓</button>
+                    <button
+                      onClick={() => removeChapter(ci)}
+                      disabled={outline.chapters.length <= 1}
+                      className="shrink-0 rounded-lg border border-line px-2 py-1 text-xs text-red/70 transition hover:bg-red-soft hover:text-red disabled:cursor-not-allowed disabled:opacity-30"
+                      title="删除章节"
+                    >✕</button>
+                  </div>
+                  <textarea
+                    value={c.description ?? ""}
+                    onChange={(e) => patchOutlineChapter(ci, { description: e.target.value })}
+                    placeholder="本章目标(可编辑)"
+                    rows={1}
+                    className="mt-2 w-full resize-none rounded-lg border border-line bg-card px-2.5 py-1.5 text-xs text-ink-soft outline-none transition focus:border-accent"
+                  />
                   <ul className="mt-2.5 space-y-1">
                     {c.steps.map((s, si) => (
                       <li key={si} className="flex items-center gap-2 text-xs text-ink-soft">
