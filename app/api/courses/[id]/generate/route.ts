@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { appendGeneratedChapters, generateChapter } from "@/lib/ai";
+import { appendGeneratedChapters, generateChapter, sanitizeSteps } from "@/lib/ai";
 import { getCourse, saveCourse } from "@/lib/store";
 import type { Chapter } from "@/lib/types";
 
@@ -34,7 +34,7 @@ export async function POST(
       if (idx < 0 || idx >= outline.chapters.length) break;
       const oc = outline.chapters[idx];
       try {
-        const steps = await generateChapter(outline, idx);
+        const steps = sanitizeSteps(await generateChapter(outline, idx));
         // 生成期间课程可能被用户删除:不再写回,防止「复活」
         if (!(await getCourse(id))) {
           return NextResponse.json({ status: "cancelled" });

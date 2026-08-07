@@ -350,7 +350,13 @@ ${HARNESS_SUFFIX}
           之间的代码可以修改,其余为种子代码(无需改动)
         </div>
       )}
-      <iframe ref={iframeRef} className="hidden" title="test-runner" />
+      {/* sandbox=allow-scripts:脚本可运行,但 opaque origin 无法访问父页面/本地数据 */}
+      <iframe
+        ref={iframeRef}
+        className="hidden"
+        title="test-runner"
+        sandbox="allow-scripts"
+      />
 
       {isTerminalLang && terminalOutput && (
         <div className="border-t border-line bg-[#0d1117]">

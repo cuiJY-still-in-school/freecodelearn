@@ -19,7 +19,7 @@ function CodeBlock({ code, children }: { code: string; children: ReactNode }) {
           }
         }}
         title="复制代码"
-        className="absolute right-2.5 top-2.5 z-10 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] text-white/70 opacity-0 transition group-hover:opacity-100 hover:bg-white/15 hover:text-white"
+        className="absolute right-2.5 top-2.5 z-10 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] text-white/70 opacity-0 transition focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100 hover:bg-white/15 hover:text-white"
       >
         {copied ? "✓ 已复制" : "复制"}
       </button>

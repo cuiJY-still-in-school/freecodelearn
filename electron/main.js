@@ -169,9 +169,13 @@ ipcMain.handle("fcl-exec", async (_event, cmdRaw, extra) => {
       : []
   );
   for (const c of extraAllowed) allowed.add(c.replace(/^.*[\\/]/, ""));
-  // 多行/&& 拼接的命令逐段校验,每段首词必须:课程未禁用,且在(默认 ∪ 课程扩展)白名单内
+  // 危险符号直接拒绝:重定向/管道拼接/命令替换都可能绕过首词白名单(如 ls; rm -rf、cat f > ~/.bashrc)
+  if (/[<>`]|\$\(/.test(cmd)) {
+    return { ok: false, error: "命令包含重定向或命令替换符号,出于安全考虑已拦截(如需写入文件,请用课程允许的命令完成)" };
+  }
+  // 多段拼接的命令(换行/&&/||/;/|)逐段校验,每段首词必须:课程未禁用,且在(默认 ∪ 课程扩展)白名单内
   const segments = cmd
-    .split(/\n|&&/i)
+    .split(/\n|&&|\|\||;|\|/i)
     .map((s) => s.trim())
     .filter(Boolean);
   for (const seg of segments) {

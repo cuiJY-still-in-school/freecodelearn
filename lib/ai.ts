@@ -443,17 +443,17 @@ export async function generateOutline(input: GenerateInput): Promise<CourseOutli
           const st = s as Record<string, unknown>;
           const type = String(st.type ?? "lesson");
           return {
-            title: String(st.title ?? `步骤 ${steps.length + 1}`),
+            title: unescapeText(String(st.title ?? `步骤 ${steps.length + 1}`)),
             type: (["lesson", "challenge", "quiz"].includes(type)
               ? type
               : "lesson") as OutlineStep["type"],
-            brief: st.brief ? String(st.brief) : "",
+            brief: st.brief ? unescapeText(String(st.brief)) : "",
           };
         }
       );
       return {
-        title: String(ch.title ?? `第 ${ci + 1} 章`),
-        description: ch.description ? String(ch.description) : "",
+        title: unescapeText(String(ch.title ?? `第 ${ci + 1} 章`)),
+        description: ch.description ? unescapeText(String(ch.description)) : "",
         steps,
       };
     })
@@ -464,8 +464,8 @@ export async function generateOutline(input: GenerateInput): Promise<CourseOutli
   }
 
   return {
-    title: String(raw.title ?? input.topic),
-    description: String(raw.description ?? `关于${input.topic}的课程`),
+    title: unescapeText(String(raw.title ?? input.topic)),
+    description: unescapeText(String(raw.description ?? `关于${input.topic}的课程`)),
     topic: input.topic,
     level: input.level,
     language: String(raw.language ?? "JavaScript"),
@@ -809,8 +809,36 @@ export async function appendGeneratedChapters(
   return course;
 }
 
-function sanitizeSteps(steps: Step[]): Step[] {
-  return steps
+/** 清理 AI 输出中常见的字面转义序列(如显示为「\n」的换行):先折叠双重转义,再还原单层转义 */
+function unescapeText(s: string): string {
+  return s
+    .replace(/\\\\n/g, "\\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "")
+    .replace(/\\t/g, "  ");
+}
+
+export function sanitizeSteps(steps: Step[]): Step[] {
+  const unescaped = steps.map((s) => {
+    const out: Step = { ...s, title: unescapeText(s.title) };
+    if (s.bodyMarkdown) out.bodyMarkdown = unescapeText(s.bodyMarkdown);
+    if (s.starterCode) out.starterCode = unescapeText(s.starterCode);
+    if (s.solution) out.solution = unescapeText(s.solution);
+    if (s.seedBefore) out.seedBefore = unescapeText(s.seedBefore);
+    if (s.seedAfter) out.seedAfter = unescapeText(s.seedAfter);
+    if (s.tests) out.tests = unescapeText(s.tests);
+    if (s.html) out.html = unescapeText(s.html);
+    if (s.questions) {
+      out.questions = s.questions.map((q) => ({
+        ...q,
+        question: unescapeText(q.question),
+        options: q.options.map(unescapeText),
+        explanation: q.explanation ? unescapeText(q.explanation) : undefined,
+      }));
+    }
+    return out;
+  });
+  return unescaped
     .filter((s) => {
       if (s.type === "quiz") {
         const valid = (s.questions ?? []).filter(

@@ -45,6 +45,17 @@ export async function POST(req: NextRequest) {
         : [],
     })),
   };
+  // 保留渐进生成的续传信息:生成中的课程导入后仍能后台补齐剩余章节
+  if (c.outline && Array.isArray(c.chapters)) {
+    course.outline = c.outline as Course["outline"];
+    course.pendingChapters = Math.max(
+      0,
+      Number(c.pendingChapters ?? 0)
+    );
+    if (c.generationError) course.generationError = c.generationError;
+  }
+  if (Array.isArray(c.allowedCommands)) course.allowedCommands = c.allowedCommands;
+  if (Array.isArray(c.blockedCommands)) course.blockedCommands = c.blockedCommands;
   await saveCourse(course);
   return NextResponse.json({ id: course.id });
 }
