@@ -99,6 +99,7 @@ export default function ChallengeRunner({
   const [hintsShown, setHintsShown] = useState(0);
   const [terminalOutput, setTerminalOutput] = useState("");
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settledRef = useRef(false);
   const hasSeed = Boolean(seedBefore || seedAfter);
@@ -140,6 +141,10 @@ export default function ChallengeRunner({
       setRunning(false);
       setResult(e.data.result as TestResult);
       settledRef.current = true;
+      // 判题结果滚动到可视区(长代码编辑场景结果可能在屏幕外)
+      window.setTimeout(() => {
+        resultRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }, 60);
       if (
         e.data.result &&
         e.data.result.failed?.length === 0 &&
@@ -384,7 +389,7 @@ ${HARNESS_SUFFIX}
       )}
 
       {result && !timeoutMsg && (
-        <div className="border-t border-line">
+        <div ref={resultRef} className="border-t border-line">
           {result.fatal ? (
             <div className="px-5 py-3 text-sm text-red">{result.fatal}</div>
           ) : (

@@ -901,22 +901,33 @@ export default function HomePage() {
 
       {/* 课程列表 */}
       <section className="mt-16">
+        {/* 排序:进行中/未开始在前,已完成置后,同组内按创建时间倒序 */}
+        {(() => {
+          const courseRows = courses
+            .map((c) => ({
+              c,
+              done: Object.values(loadProgress(c.id)).filter(Boolean).length,
+            }))
+            .sort((x, y) => {
+              const xDone = x.c.pendingChapters === 0 && x.c.stepCount > 0 && x.done >= x.c.stepCount ? 1 : 0;
+              const yDone = y.c.pendingChapters === 0 && y.c.stepCount > 0 && y.done >= y.c.stepCount ? 1 : 0;
+              if (xDone !== yDone) return xDone - yDone;
+              return y.c.createdAt.localeCompare(x.c.createdAt);
+            });
+          return (
+        <>
         <div className="mb-5 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-serif text-2xl font-bold">课程列表</h2>
           {!loading && courses.length > 0 && (
             <span className="text-xs text-ink-soft">
               共 {courses.length} 门
               {(() => {
-                const doneCount = courses.filter((c) => {
-                  const prog = loadProgress(c.id);
-                  const done = Object.values(prog).filter(Boolean).length;
-                  // 生成中课程不计入已完成(stepCount 只含已生成章节)
-                  return (
-                    c.pendingChapters === 0 &&
-                    c.stepCount > 0 &&
-                    done >= c.stepCount
-                  );
-                }).length;
+                const doneCount = courseRows.filter(
+                  (r) =>
+                    r.c.pendingChapters === 0 &&
+                    r.c.stepCount > 0 &&
+                    r.done >= r.c.stepCount
+                ).length;
                 return doneCount > 0 ? ` · 已完成 ${doneCount} 门` : "";
               })()}
             </span>
@@ -972,9 +983,7 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {courses.map((c) => {
-              const prog = loadProgress(c.id);
-              const done = Object.values(prog).filter(Boolean).length;
+            {courseRows.map(({ c, done }) => {
               const pct = c.stepCount
                 ? Math.min(100, Math.round((done / c.stepCount) * 100))
                 : 0;
@@ -1066,6 +1075,9 @@ export default function HomePage() {
             })}
           </div>
         )}
+        </>
+        );
+        })()}
       </section>
 
       {notice && (

@@ -16,7 +16,7 @@ function CodeBlock({
 }) {
   const [copied, setCopied] = useState(false);
   return (
-    <pre className="group relative overflow-hidden rounded-xl">
+    <pre className="fcl-codeblock group relative overflow-hidden rounded-xl">
       <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-1.5">
         <span className="font-mono text-[10px] font-medium uppercase tracking-wider text-white/40">
           {lang || "code"}
@@ -37,7 +37,7 @@ function CodeBlock({
           {copied ? "✓ 已复制" : "复制"}
         </button>
       </div>
-      <code>{children}</code>
+      <code className="block overflow-x-auto p-4">{children}</code>
     </pre>
   );
 }

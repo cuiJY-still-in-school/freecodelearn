@@ -119,6 +119,10 @@ body {
   font-size: 0.88rem;
   line-height: 1.6;
 }
+/* 带语言徽标/复制按钮的代码块:内边距由内部 code 控制,避免双重留白 */
+.prose-course pre.fcl-codeblock {
+  padding: 0;
+}
 .prose-course blockquote {
   border-left: 3px solid var(--accent);
   background: var(--bg-subtle);
