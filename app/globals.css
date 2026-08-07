@@ -296,3 +296,49 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scroll-thumb-hover);
 }
+
+/* ---------- 打印 ---------- */
+@media print {
+  nav,
+  aside,
+  button,
+  a,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .prose-course,
+  .prose-course p,
+  .prose-course ul,
+  .prose-course ol {
+    color: #1a1a1a !important;
+  }
+  .prose-course h1,
+  .prose-course h2,
+  .prose-course h3,
+  .prose-course strong {
+    color: #000 !important;
+  }
+  .prose-course pre {
+    background: #f4f4f4 !important;
+    border: 1px solid #dcdcdc !important;
+    color: #111 !important;
+    break-inside: avoid;
+  }
+  .prose-course pre code {
+    color: #111 !important;
+  }
+  .prose-course blockquote {
+    background: #f8f8f8 !important;
+    color: #333 !important;
+  }
+  .cm-editor,
+  .cm-editor *,
+  iframe,
+  .fade-up {
+    animation: none !important;
+  }
+}
