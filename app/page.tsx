@@ -896,7 +896,12 @@ export default function HomePage() {
                 const doneCount = courses.filter((c) => {
                   const prog = loadProgress(c.id);
                   const done = Object.values(prog).filter(Boolean).length;
-                  return c.stepCount > 0 && done >= c.stepCount;
+                  // 生成中课程不计入已完成(stepCount 只含已生成章节)
+                  return (
+                    c.pendingChapters === 0 &&
+                    c.stepCount > 0 &&
+                    done >= c.stepCount
+                  );
                 }).length;
                 return doneCount > 0 ? ` · 已完成 ${doneCount} 门` : "";
               })()}
@@ -997,7 +1002,7 @@ export default function HomePage() {
                   </span>
                 </div>
                 <div className="mb-3 flex items-center gap-2">
-                  {pct >= 100 ? (
+                  {pct >= 100 && c.pendingChapters === 0 ? (
                     <span className="rounded-full border border-green/30 bg-green-soft px-2.5 py-0.5 text-xs font-medium text-green">
                       ✓ 已完成
                     </span>

@@ -155,6 +155,22 @@ export default function CoursePlayer({ course }: { course: Course }) {
     }, 2500);
   }, [courseState, chapterFlash]);
 
+  // 兜底:用户完成最后已生成步骤后刷新页面(章节横幅丢失),下一章生成就绪后自动进入
+  useEffect(() => {
+    if (pending <= 0 || flashTimerRef.current) return;
+    if (!currentId || !progress[currentId]) return;
+    if (nextStepId(courseState, currentId)) return;
+    const lastFlat = flat[flat.length - 1];
+    if (!lastFlat || currentId !== lastFlat.step.id) return;
+    const nextIdx =
+      courseState.chapters.findIndex((c) => c.id === lastFlat.chapter.id) + 1;
+    const nextCh = courseState.chapters[nextIdx];
+    if (!nextCh?.steps[0]) return;
+    flashTimerRef.current = setTimeout(() => {
+      goTo(nextCh.steps[0].id);
+    }, 1200);
+  }, [courseState, currentId, progress, pending, flat]);
+
   // 键盘 ←/→ 切换步骤(编辑器中不触发)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -581,7 +597,9 @@ export default function CoursePlayer({ course }: { course: Course }) {
           <div className="mt-10 rounded-2xl border border-dashed border-line p-6">
             <h3 className="font-serif text-base font-bold">扩展课程</h3>
             <p className="mt-1 text-xs text-ink-soft">
-              由 AI 为这门课程追加一个全新章节(3-5 个步骤)
+              {pending > 0
+                ? "章节仍在后台生成中,全部完成后即可扩展新章节"
+                : "由 AI 为这门课程追加一个全新章节(3-5 个步骤)"}
             </p>
             <form
               className="mt-3 flex gap-2"
@@ -610,12 +628,13 @@ export default function CoursePlayer({ course }: { course: Course }) {
               <input
                 value={appendTitle}
                 onChange={(e) => setAppendTitle(e.target.value)}
-                placeholder="新章节标题,例如:高阶技巧"
-                className="flex-1 rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent"
+                placeholder={pending > 0 ? "章节生成完成后可扩展" : "新章节标题,例如:高阶技巧"}
+                disabled={pending > 0}
+                className="flex-1 rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent disabled:cursor-not-allowed disabled:opacity-40"
               />
               <button
                 type="submit"
-                disabled={appending || !appendTitle.trim()}
+                disabled={pending > 0 || appending || !appendTitle.trim()}
                 className="shrink-0 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {appending ? "生成中..." : "追加章节"}
