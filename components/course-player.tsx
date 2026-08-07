@@ -143,6 +143,14 @@ export default function CoursePlayer({ course }: { course: Course }) {
   } | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 卸载时清理自动跳转定时器,避免离开课程页后仍触发 setState
+  useEffect(
+    () => () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    },
+    []
+  );
+
   // 章节横幅自动跳转:下一章已生成 → 2.5s 后进入;尚未生成 → 等轮询刷新后就绪再跳
   useEffect(() => {
     if (!chapterFlash) return;

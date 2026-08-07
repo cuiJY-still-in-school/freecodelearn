@@ -7,7 +7,7 @@ import ReactMarkdown from "react-markdown";
 function CodeBlock({ code, children }: { code: string; children: ReactNode }) {
   const [copied, setCopied] = useState(false);
   return (
-    <pre className="relative">
+    <pre className="group relative">
       <button
         onClick={async () => {
           try {
