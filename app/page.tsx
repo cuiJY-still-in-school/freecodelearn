@@ -64,6 +64,56 @@ export default function HomePage() {
   // 提示
   const [notice, setNotice] = useState("");
 
+  // 生成流程快照:生成中切换页面(设置/刷新)后恢复,不丢进度
+  const SNAP_KEY = "fcl-gen-snapshot";
+  interface GenSnapshot {
+    topic: string;
+    level: "beginner" | "intermediate" | "advanced";
+    goal: string;
+    extra: string;
+    refDoc: { name: string; text: string } | null;
+    refCourseId: string;
+    refCourseSummary: string;
+    researchNote: string;
+    phase: "researching" | "preview" | "generating" | "done";
+    outline: CourseOutline | null;
+  }
+
+  // 生成流程中持续快照到 sessionStorage(离开页面组件卸载后,回来可恢复)
+  // 注意:phase==="input" 时不删快照——挂载时恢复逻辑可能尚未执行,避免竞态删掉待恢复数据
+  const [justRestored, setJustRestored] = useState(false);
+  useEffect(() => {
+    if (justRestored) {
+      // 刚恢复的快照不立即写回,避免每次回首页都被拉回生成流程
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 一次性消费恢复标记,仅复位布尔值,无级联
+      setJustRestored(false);
+      return;
+    }
+    if (phase === "input") return;
+    if (phase === "done") {
+      sessionStorage.removeItem(SNAP_KEY);
+      return;
+    }
+    const snap: GenSnapshot = {
+      topic,
+      level,
+      goal,
+      extra,
+      refDoc,
+      refCourseId,
+      refCourseSummary,
+      researchNote,
+      phase,
+      outline,
+    };
+    try {
+      sessionStorage.setItem(SNAP_KEY, JSON.stringify(snap));
+    } catch {
+      // 快照过大等写入失败:不阻塞主流程
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, outline, researchNote]);
+
   // 导入
   const [importing, setImporting] = useState(false);
 
@@ -107,6 +157,47 @@ export default function HomePage() {
       window.history.replaceState({}, "", "/");
       window.setTimeout(() => topicRef.current?.focus(), 600);
     }
+
+    // 生成流程快照恢复:生成中去设置页/刷新,回来继续,不丢进度
+    try {
+      const raw = sessionStorage.getItem(SNAP_KEY);
+      if (raw) {
+        sessionStorage.removeItem(SNAP_KEY);
+        const snap = JSON.parse(raw) as GenSnapshot;
+        setTopic(snap.topic);
+        setLevel(snap.level);
+        setGoal(snap.goal);
+        setExtra(snap.extra);
+        setRefDoc(snap.refDoc ?? null);
+        setRefCourseId(snap.refCourseId);
+        setRefCourseSummary(snap.refCourseSummary);
+        setResearchNote(snap.researchNote ?? "");
+        if (snap.phase === "preview" && snap.outline) {
+          setOutline(snap.outline);
+          setPhase("preview");
+          setJustRestored(true);
+        } else if (snap.phase === "researching") {
+          // 检索/大纲请求随页面离开中断:恢复后自动重跑
+          setPhase("researching");
+          setJustRestored(true);
+          window.setTimeout(() => {
+            runGeneration(snap.topic, snap.level).catch(() => {});
+          }, 0);
+        } else if (snap.phase === "generating" && snap.outline) {
+          // 首章生成中断:回到确认页重新确认
+          setOutline(snap.outline);
+          setPhase("preview");
+          setJustRestored(true);
+          setFormError(
+            "第一章生成因页面切换而中断,确认大纲后将重新生成,后续章节仍会在学习时自动补齐"
+          );
+        }
+        // done:课程已保存,回到输入态,列表可见
+      }
+    } catch {
+      sessionStorage.removeItem(SNAP_KEY);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 恢复逻辑只需挂载时执行一次
   }, [router]);
 
   async function refreshCourses() {
@@ -139,8 +230,10 @@ export default function HomePage() {
     }
   }
 
-  async function runGeneration() {
+  async function runGeneration(topicArg?: string, levelArg?: typeof level) {
     // ① 联网检索资料:先让 AI 制定查询计划,再逐词抓取(失败则跳过,不阻塞)
+    const t = topicArg ?? topic;
+    const lv = levelArg ?? level;
     setPhase("researching");
     setResearchNote("");
     setResearchState({ plan: "running", queries: [], done: 0, current: "" });
@@ -151,7 +244,7 @@ export default function HomePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          topic,
+          topic: t,
           goal: goal.trim() || undefined,
         }),
       });
@@ -201,8 +294,8 @@ export default function HomePage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        topic,
-        level,
+        topic: t,
+        level: lv,
         goal: goal.trim() || undefined,
         description: extra || undefined,
         researchNotes: notes || undefined,
