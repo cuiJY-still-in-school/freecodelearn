@@ -187,11 +187,14 @@ export default function CoursePlayer({ course }: { course: Course }) {
   );
 
   // 章节横幅自动跳转:下一章已生成 → 2.5s 后进入;尚未生成 → 等轮询刷新后就绪再跳
+  // 终端类挑战不自动跳(等用户看完终端输出),仅显示横幅
   useEffect(() => {
     if (!chapterFlash) return;
     const nextCh = courseState.chapters[chapterFlash.chapterIndex];
     const firstOfNext = nextCh?.steps[0];
     if (!firstOfNext || flashTimerRef.current) return;
+    const curLang = step?.language ?? "";
+    if (/shell|git|bash|zsh|powershell|cmd|命令行|终端|命令/i.test(curLang)) return;
     flashTimerRef.current = setTimeout(() => {
       setChapterFlash(null);
       goTo(firstOfNext.id);
@@ -458,7 +461,14 @@ export default function CoursePlayer({ course }: { course: Course }) {
                 <path d="m15 18-6-6 6-6" />
               </svg>
             </Link>
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+            <div
+              className="h-1.5 flex-1 overflow-hidden rounded-full bg-line"
+              role="progressbar"
+              aria-label="课程进度"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
               <div
                 className="h-full rounded-full bg-accent transition-all duration-700"
                 style={{ width: `${pct}%` }}

@@ -1056,6 +1056,7 @@ export default function HomePage() {
                 value={courseQuery}
                 onChange={(e) => setCourseQuery(e.target.value)}
                 placeholder="搜索课程 / 语言..."
+                aria-label="搜索课程"
                 className="w-44 rounded-lg border border-line bg-card px-3 py-1.5 text-xs outline-none transition focus:border-accent"
               />
             )}

@@ -4,6 +4,14 @@ import { saveCourse } from "@/lib/store";
 import type { Course } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
+  // 导入上限:课程 JSON ≤ 10MB,防止写入任意大文件
+  const len = Number(req.headers.get("content-length") ?? 0);
+  if (len > 10 * 1024 * 1024) {
+    return NextResponse.json(
+      { error: "课程文件过大(上限 10MB)" },
+      { status: 413 }
+    );
+  }
   let data: unknown;
   try {
     data = await req.json();

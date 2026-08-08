@@ -18,8 +18,8 @@ fi
 rm -rf .next
 npm run build
 
-# 3. 启动
-nohup npm run start > /tmp/fcl-server.log 2>&1 &
+# 3. 启动(仅绑定本机回环,避免局域网内泄露 API Key/课程数据)
+nohup npm run start -- -H 127.0.0.1 > /tmp/fcl-server.log 2>&1 &
 sleep 3
 if curl -sf -o /dev/null http://localhost:3000/; then
   echo "✓ freecodelearn 已启动: http://localhost:3000  (日志: /tmp/fcl-server.log)"

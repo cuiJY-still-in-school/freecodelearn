@@ -91,6 +91,7 @@ export default function CourseSidebar({
               <button
                 onClick={() => toggleChapter(chapter.id)}
                 title={isCollapsed ? "展开章节" : "折叠章节"}
+                aria-expanded={!isCollapsed}
                 className="mb-1.5 flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
               >
                 <span>
@@ -124,6 +125,7 @@ export default function CourseSidebar({
                     key={step.id}
                     ref={active ? activeRef : undefined}
                     onClick={() => onNavigate(step.id)}
+                    aria-current={active ? "page" : undefined}
                     className={`mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[13px] transition ${
                       active
                         ? "bg-accent-soft text-accent"
