@@ -24,6 +24,7 @@ const CACHE_TTL_MS = 7 * 24 * 3600_000;
 const FETCH_TIMEOUT_MS = 20_000;
 
 interface RawModelsDirectory {
+  // 官方结构:顶层即服务商 map;历史/包装结构:{ providers: {...} }
   providers?: Record<
     string,
     {
@@ -33,7 +34,16 @@ interface RawModelsDirectory {
       models?: Record<string, { name?: string } | null> | null;
     }
   >;
+  [key: string]: unknown;
 }
+
+// 拉取端点 fallback 链:官方优先,jsDelivr CDN 镜像兜底(国内可达)
+const ENDPOINTS = [
+  "https://models.dev/api.json",
+  "https://cdn.jsdelivr.net/gh/JochenYang/models.dev@main/api.json",
+  "https://fastly.jsdelivr.net/gh/JochenYang/models.dev@main/api.json",
+  "https://cdn.jsdelivr.net/gh/symfony/models-dev@main/models-dev.json",
+];
 
 /** 从模型列表里挑最常用的默认模型(优先常见对话模型名,否则取第一个) */
 function pickDefaultModel(models: Record<string, unknown> | null | undefined): {
@@ -77,8 +87,20 @@ function parseDirectory(raw: string): ProviderInfo[] {
   } catch {
     throw new Error("模型目录数据解析失败");
   }
-  const provs = data?.providers;
-  if (!provs || typeof provs !== "object") throw new Error("模型目录结构异常");
+  // 兼容两种结构:顶层直接是服务商 map,或包在 providers 字段里
+  let provs: RawModelsDirectory["providers"] | undefined;
+  if (data && typeof data === "object") {
+    if (data.providers && typeof data.providers === "object") provs = data.providers;
+    else if (!Array.isArray(data) && typeof (data as Record<string, unknown>)["api"] === "undefined" && typeof (data as Record<string, unknown>)["models"] === "undefined") {
+      // 顶层没有包装键时,把非 API 端点字段的对象当成服务商 map
+      const candidate = data as unknown as Record<string, unknown>;
+      const hasProviderShape = Object.values(candidate).some(
+        (v) => v && typeof v === "object" && !Array.isArray(v)
+      );
+      if (hasProviderShape) provs = data as unknown as RawModelsDirectory["providers"];
+    }
+  }
+  if (!provs) throw new Error("模型目录结构异常");
   const out: ProviderInfo[] = [];
   for (const key of Object.keys(provs)) {
     const p = provs[key];
@@ -128,8 +150,21 @@ function writeCache(providers: ProviderInfo[]): void {
   }
 }
 
+async function fetchWithTimeout(url: string, ms: number): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
- * 获取服务商目录:先缓存,再实时拉取 models.dev,失败降级内置预设。
+ * 获取服务商目录:先缓存,再按 fallback 链实时拉取(models.dev 官方 → jsDelivr CDN
+ * 镜像,共 4 个端点),全部失败降级到 Custom 手填。
  * force=true 时忽略缓存强制刷新(失败仍降级)。
  */
 export async function fetchModelsDirectory(force = false): Promise<ProviderInfo[]> {
@@ -137,26 +172,20 @@ export async function fetchModelsDirectory(force = false): Promise<ProviderInfo[
     const cached = readCache();
     if (cached) return cached;
   }
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-    let res: Response;
+  let lastErr = "";
+  for (const url of ENDPOINTS) {
     try {
-      res = await fetch("https://models.dev/api.json", {
-        signal: ctrl.signal,
-        cache: "no-store",
-      });
-    } finally {
-      clearTimeout(timer);
+      const text = await fetchWithTimeout(url, FETCH_TIMEOUT_MS);
+      const providers = parseDirectory(text);
+      if (providers.length > 0) {
+        writeCache(providers);
+        return providers;
+      }
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : String(err);
+      console.warn(`[models-directory] ${url} 失败:`, lastErr);
     }
-    if (!res.ok) throw new Error(`models.dev 请求失败 (${res.status})`);
-    const text = await res.text();
-    const providers = parseDirectory(text);
-    writeCache(providers);
-    return providers;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn("[models-directory] 拉取失败,使用内置预设:", msg);
-    return FALLBACK_PROVIDERS;
   }
+  console.warn("[models-directory] 所有端点不可达:", lastErr);
+  return FALLBACK_PROVIDERS;
 }
