@@ -495,7 +495,14 @@ export async function generateOutline(input: GenerateInput): Promise<CourseOutli
   }\n\n${OUTLINE_TASK}`;
 
   const content = await chat(userPrompt, true);
+  return parseOutlineRaw(content, input);
+}
+
+/** 从 AI 输出中解析课程大纲(共用:全新生成与对话修订都走这里) */
+function parseOutlineRaw(content: string, input: GenerateInput): CourseOutline {
   const raw = parseJSON(content);
+  const refDoc = (input.referenceDoc ?? "").slice(0, 30000);
+  const researchNotes = (input.researchNotes ?? "").slice(0, 30000);
 
   const chapters: OutlineChapter[] = (Array.isArray(raw.chapters) ? raw.chapters : [])
     .map((c, ci) => {
@@ -944,4 +951,284 @@ export function sanitizeSteps(steps: Step[]): Step[] {
       return true;
     })
     .map((s) => s);
+}
+
+/* ---------- 对话式课程生成(analyze / narrate / revise) ---------- */
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AnalyzeOptions {
+  referenceDoc?: string;
+  courseList?: { id: string; title: string }[];
+}
+
+export interface AnalyzeResult {
+  action: "ask" | "outline" | "reject";
+  reason: string;
+  question: string;
+  suggestions: string[];
+  topic: string;
+  level: "beginner" | "intermediate" | "advanced";
+  goal: string;
+  extra: string;
+  techStack: string[];
+  refCourseId: string;
+}
+
+const ANALYZE_TASK = `你是课程需求分析助手,用户通过对话描述想学的编程课程。根据对话历史判断下一步,输出严格 JSON(不要任何多余文字,不要 markdown 代码块):
+{
+  "action": "ask" | "outline" | "reject",
+  "reason": "一句话说明(中文)",
+  "question": "action=ask 时的问题(只问最关键的一个)",
+  "suggestions": "action=ask 时的快捷回复选项(2-3 个,简短)",
+  "topic": "课程主题(action=outline 时必填)",
+  "level": "beginner|intermediate|advanced",
+  "goal": "学习目标:用户希望学完达到什么效果(没有则空)",
+  "extra": "补充约束:技术栈偏好、内容侧重、参考课程等(没有则空)",
+  "techStack": ["AI 选定的技术栈:语言/框架/工具,2-4 项"],
+  "refCourseId": "用户想参考的已有课程 id(从提供的课程列表中匹配;没有则空)"
+}
+
+规则:
+1. 主题把关:主题与编程/技术学习无关(如烹饪、健身、音乐)时 action=reject,reason 说明;无法确定时偏向通过
+2. 只有真正缺关键信息(学什么不明确、或水平完全无法判断)才 action=ask,一次只问一个最关键的问题,并给出 2-3 个快捷回复选项;能推断就推断,不要连珠炮提问
+3. 信息足够时 action=outline,并替用户决策:AI 根据用户描述与业界惯例选择最合适的技术栈(用户没指定语言时,选该领域最主流、最适合入门的组合,如爬虫→Python+requests)
+4. level 推断:从未写过代码=beginner,有基础但换新领域=intermediate,专业开发者或明确要求=advanced;推断不出时给 beginner
+5. goal 用一句话总结用户想要的成果;extra 记录其余约束;用户没提的字段留空,不要编造
+6. 用户提到「参考我学过的《课程名》」时,从课程列表中匹配最近似的 id 填入 refCourseId,匹配不到就留空
+7. 对话可能很长,最后一条用户消息最重要,但也要参考之前的澄清
+
+用户已有课程列表:${""}在请求中提供时按标题匹配。
+
+对话历史:`;
+
+/** 对话式课程生成:分析对话 → 决定追问 / 出参数 / 拒绝 */
+export async function analyzeChat(
+  turns: ChatTurn[],
+  opts: AnalyzeOptions = {}
+): Promise<AnalyzeResult> {
+  const courseList =
+    opts.courseList && opts.courseList.length > 0
+      ? opts.courseList.map((c) => `${c.id}\t${c.title}`).join("\n")
+      : "(无)";
+  const history = turns
+    .map((t) => `${t.role === "user" ? "用户" : "助手"}: ${t.content}`)
+    .join("\n");
+  const userPrompt = `${systemContext()}\n\n${ANALYZE_TASK}\n课程列表:\n${courseList}\n\n${history}`;
+  const content = await chat(userPrompt, true);
+  const raw = parseJSON(content);
+  const action = ["ask", "outline", "reject"].includes(String(raw.action))
+    ? (raw.action as AnalyzeResult["action"])
+    : "ask";
+  const suggestions = (Array.isArray(raw.suggestions) ? raw.suggestions : [])
+    .map((s) => String(s).slice(0, 60))
+    .filter(Boolean)
+    .slice(0, 3);
+  return {
+    action,
+    reason: raw.reason ? String(raw.reason).slice(0, 200) : "",
+    question: String(raw.question ?? "可以再详细说说你想学什么吗?").slice(0, 500),
+    suggestions,
+    topic: String(raw.topic ?? turns[turns.length - 1]?.content ?? "").slice(0, 120),
+    level: ["beginner", "intermediate", "advanced"].includes(String(raw.level))
+      ? (raw.level as AnalyzeResult["level"])
+      : "beginner",
+    goal: String(raw.goal ?? "").slice(0, 300),
+    extra: String(raw.extra ?? "").slice(0, 500),
+    techStack: (Array.isArray(raw.techStack) ? raw.techStack : [])
+      .map((s) => String(s).slice(0, 40))
+      .filter(Boolean)
+      .slice(0, 4),
+    refCourseId: String(raw.refCourseId ?? "").slice(0, 64),
+  };
+}
+
+const NARRATE_TASK = (params: {
+  topic: string;
+  techStack: string[];
+  goal: string;
+}) => `你是课程设计师。用 120-200 字向学习者说明你的课程设计思路,像一位耐心的导师:
+- 选定技术栈「${params.techStack.join("、") || "最合适的组合"}」的理由(面向目标,贴合需求)
+- 课程如何组织(项目主线、由浅入深)
+- 学完能获得什么
+语气简洁、有说服力,不要列点,一段话讲完。只输出正文,不要任何格式标记。
+课程主题:${params.topic}${params.goal ? `;学习目标:${params.goal}` : ""}`;
+
+/** 流式输出 AI 设计说明(SSE 事件按块回调) */
+export async function narrateDesign(
+  params: { topic: string; techStack: string[]; goal: string },
+  onChunk: (text: string) => void,
+  overrides?: Partial<AISettings>
+): Promise<string> {
+  return chatStream(
+    `${systemContext()}\n\n${NARRATE_TASK(params)}`,
+    onChunk,
+    overrides
+  );
+}
+
+const REVISE_TASK = `你是课程设计专家,擅长根据用户反馈修订课程大纲。输出严格 JSON,格式与「设计课程大纲」任务完全一致(见下方结构)。
+
+设计课程大纲 JSON 结构(与原任务相同):
+{
+  "title": "课程标题",
+  "description": "课程简介",
+  "topic": "主题",
+  "level": "beginner|intermediate|advanced",
+  "language": "编程语言或工具语言",
+  "estimatedMinutes": 预计总分钟数,
+  "allowedCommands": ["命令行类课程额外命令"], "blockedCommands": ["禁用命令"],
+  "chapters": [{ "title": "章节标题", "description": "本章目标", "steps": [{ "title": "步骤标题", "type": "lesson|challenge|quiz", "brief": "核心内容与改动点" }] }]
+}
+
+规则:
+1. 用户可能要求:调整难度、更换技术栈、增删章节、改节奏、调整章节顺序或补充知识点
+2. 尊重用户意见,但保持 freeCodeCamp 风格设计规则:项目主线、循序渐进、每章 4-7 步、quiz 在章末
+3. 用户没有要求改动的章节保留其标题与顺序;要求换技术栈时,语言、示例、章节内容随之整体更换(结构可按新栈重排)
+4. 全部章节都要输出(不是只输出修改的章节)
+5. 若用户反馈只是确认/赞许(如「可以」「很好」),输出与当前大纲一致的修订版即可`;
+
+/** 对话修订大纲:根据用户反馈与当前大纲生成新版 */
+export async function reviseOutline(
+  currentOutline: CourseOutline,
+  turns: ChatTurn[],
+  input: GenerateInput
+): Promise<CourseOutline> {
+  const lastFeedback = turns.filter((t) => t.role === "user").slice(-3);
+  const feedback = lastFeedback.map((t) => `用户: ${t.content}`).join("\n");
+  const current = JSON.stringify({
+    title: currentOutline.title,
+    description: currentOutline.description,
+    level: currentOutline.level,
+    language: currentOutline.language,
+    estimatedMinutes: currentOutline.estimatedMinutes,
+    chapters: currentOutline.chapters.map((c) => ({
+      title: c.title,
+      description: c.description,
+      steps: c.steps.map((s) => ({ title: s.title, type: s.type, brief: s.brief })),
+    })),
+  });
+  const refDoc = (input.referenceDoc ?? "").slice(0, 30000);
+  const researchNotes = (input.researchNotes ?? "").slice(0, 30000);
+  const userPrompt = `${systemContext()}\n\n请根据用户反馈修订课程大纲。\n\n当前大纲(JSON):\n"""\n${current}\n"""\n\n用户反馈:\n${feedback}${
+    refDoc
+      ? `\n\n参考文档(保持一致):\n"""\n${refDoc}\n"""`
+      : ""
+  }${
+    researchNotes
+      ? `\n\n联网检索资料(保持一致):\n"""\n${researchNotes}\n"""`
+      : ""
+  }\n\n${REVISE_TASK}`;
+  const content = await chat(userPrompt, true);
+  return parseOutlineRaw(content, input);
+}
+
+/** 流式调用 AI(OpenAI 兼容 / Anthropic),chunk 回调增量文本;返回完整文本 */
+async function chatStream(
+  userPrompt: string,
+  onChunk: (text: string) => void,
+  overrides?: Partial<AISettings>
+): Promise<string> {
+  const stored = await getSettings();
+  const settings = { ...(stored ?? {}), ...(overrides ?? {}) } as AISettings;
+  if (!settings || !settings.apiKey) {
+    throw new Error(
+      "未配置 AI 服务。请先在「设置」页填写 provider / baseUrl / apiKey / model,或设置环境变量 AI_BASE_URL、AI_API_KEY、AI_MODEL"
+    );
+  }
+
+  const baseUrl = (settings.baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
+  const method = settings.parseMethod ?? "openai";
+  const TIMEOUT_MS = 180_000;
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    let response: Response;
+    if (method === "anthropic") {
+      response = await fetch(`${baseUrl}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": settings.apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: settings.model,
+          max_tokens: 1024,
+          temperature: 0.7,
+          stream: true,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: userPrompt }],
+        }),
+        signal: ctrl.signal,
+      });
+    } else {
+      response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${settings.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: settings.model,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.7,
+          stream: true,
+        }),
+        signal: ctrl.signal,
+      });
+    }
+    if (!response.ok || !response.body) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`AI 服务请求失败 (${response.status}): ${text.slice(0, 300)}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let full = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      // SSE 事件按空行分隔;兼容 OpenAI 的 "data:" 行与 Anthropic 的 "data:" JSON
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+      for (const evt of events) {
+        for (const line of evt.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (payload === "[DONE]") continue;
+          let delta = "";
+          try {
+            const json = JSON.parse(payload);
+            if (method === "anthropic") {
+              if (json.type === "content_block_delta" && json.delta?.text) {
+                delta = String(json.delta.text);
+              }
+            } else if (json.choices?.[0]?.delta?.content) {
+              delta = String(json.choices[0].delta.content);
+            }
+          } catch {
+            // 忽略无法解析的事件(如 keep-alive)
+          }
+          if (delta) {
+            full += delta;
+            onChunk(delta);
+          }
+        }
+      }
+    }
+    if (!full) throw new Error("AI 返回为空,请检查模型配置");
+    return full;
+  } finally {
+    clearTimeout(timer);
+  }
 }
