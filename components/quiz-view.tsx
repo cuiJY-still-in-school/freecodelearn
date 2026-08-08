@@ -64,6 +64,17 @@ export default function QuizView({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (checked || shown.length === 0) return;
+      // 在输入框/文本域/可编辑区中输入时不做任何拦截(避免劫持数字/Enter)
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
       if (e.key === "Enter") {
         if (allAnswered) check();
         return;

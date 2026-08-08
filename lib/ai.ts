@@ -171,66 +171,110 @@ async function chat(
   );
   const method = settings.parseMethod ?? "openai";
 
-  if (method === "anthropic") {
-    const response = await fetch(`${baseUrl}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": settings.apiKey,
-        "anthropic-version": "2023-06-01",
-        ...(json ? { "anthropic-beta": "json-20250507" } : {}),
-      },
-      body: JSON.stringify({
-        model: settings.model,
-        max_tokens: 8192,
-        temperature: 0.7,
-        system: json
-          ? `${SYSTEM_PROMPT}\n\n严格输出 JSON,不要任何多余文字或 markdown 代码块。`
-          : SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userPrompt }],
-      }),
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`AI 服务请求失败 (${response.status}): ${text.slice(0, 300)}`);
+  // 生成类任务耗时较长,给 180s 超时;失败重试 1 次(共 2 次尝试)
+  const TIMEOUT_MS = 180_000;
+  const ATTEMPTS = 2;
+  let lastErr: unknown;
+
+  const callOnce = async (): Promise<string> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    try {
+      if (method === "anthropic") {
+        const response = await fetch(`${baseUrl}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": settings.apiKey,
+            "anthropic-version": "2023-06-01",
+            ...(json ? { "anthropic-beta": "json-20250507" } : {}),
+          },
+          body: JSON.stringify({
+            model: settings.model,
+            max_tokens: 8192,
+            temperature: 0.7,
+            system: json
+              ? `${SYSTEM_PROMPT}\n\n严格输出 JSON,不要任何多余文字或 markdown 代码块。`
+              : SYSTEM_PROMPT,
+            messages: [{ role: "user", content: userPrompt }],
+          }),
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(
+            `AI 服务请求失败 (${response.status}): ${text.slice(0, 300)}`
+          );
+        }
+        let data: unknown;
+        try {
+          data = await response.json();
+        } catch {
+          throw new Error("AI 返回内容无法解析,请检查模型配置");
+        }
+        const content: string =
+          (Array.isArray((data as { content?: unknown })?.content)
+            ? (data as { content: { text?: string }[] }).content
+                .map((b) => b?.text ?? "")
+                .join("")
+            : "") ?? "";
+        if (!content) throw new Error("AI 返回为空,请检查模型配置");
+        return content;
+      }
+
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${settings.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: settings.model,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.7,
+          ...(json ? { response_format: { type: "json_object" } } : {}),
+        }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(
+          `AI 服务请求失败 (${response.status}): ${text.slice(0, 300)}`
+        );
+      }
+
+      let data: unknown;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error("AI 返回内容无法解析,请检查模型配置");
+      }
+      const content: string =
+        (data as { choices?: { message?: { content?: string } }[] })?.choices?.[0]
+          ?.message?.content ?? "";
+      if (!content) throw new Error("AI 返回为空,请检查模型配置");
+      return content;
+    } finally {
+      clearTimeout(timer);
     }
-    const data = await response.json();
-    const content: string =
-      (Array.isArray(data?.content)
-        ? data.content
-            .map((b: { text?: string }) => b?.text ?? "")
-            .join("")
-        : "") ?? "";
-    if (!content) throw new Error("AI 返回为空,请检查模型配置");
-    return content;
+  };
+
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    try {
+      return await callOnce();
+    } catch (err) {
+      lastErr = err;
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error(`AI 请求超时(${TIMEOUT_MS / 1000} 秒),请重试或检查网络`);
+      }
+      if (attempt < ATTEMPTS - 1) {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
   }
-
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: settings.model,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.7,
-      ...(json ? { response_format: { type: "json_object" } } : {}),
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`AI 服务请求失败 (${response.status}): ${text.slice(0, 300)}`);
-  }
-
-  const data = await response.json();
-  const content: string = data?.choices?.[0]?.message?.content ?? "";
-  if (!content) throw new Error("AI 返回为空,请检查模型配置");
-  return content;
+  throw lastErr instanceof Error ? lastErr : new Error("AI 请求失败,请重试");
 }
 
 function parseJSON(content: string): Record<string, unknown> {
@@ -243,8 +287,12 @@ function parseJSON(content: string): Record<string, unknown> {
   } catch {
     const start = cleaned.indexOf("{");
     const end = cleaned.lastIndexOf("}");
-    if (start === -1 || end === -1) throw new Error("AI 输出无法解析为 JSON");
-    return JSON.parse(cleaned.slice(start, end + 1));
+    if (start === -1 || end === -1) throw new Error("AI 输出无法解析为 JSON,请重试");
+    try {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    } catch {
+      throw new Error("AI 输出无法解析为 JSON,请重试");
+    }
   }
 }
 

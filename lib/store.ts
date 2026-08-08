@@ -71,12 +71,18 @@ export async function getCourse(id: string): Promise<Course | null> {
   }
 }
 
+// 原子写:先写临时文件再 rename,避免读-改-写交错时读到半截文件
+async function atomicWrite(file: string, data: string): Promise<void> {
+  const tmp = `${file}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, data, "utf8");
+  await fs.rename(tmp, file);
+}
+
 export async function saveCourse(course: Course): Promise<void> {
   await ensureDirs();
-  await fs.writeFile(
+  await atomicWrite(
     path.join(COURSES_DIR, `${safeId(course.id)}.json`),
-    JSON.stringify(course, null, 2),
-    "utf8"
+    JSON.stringify(course, null, 2)
   );
 }
 

@@ -68,7 +68,7 @@ window.onerror = (msg) => { __fcl.fatal = "脚本错误: " + msg; };
 `;
 
 const HARNESS_SUFFIX = `
-parent.postMessage({ type: "fcl-result", result: __fcl }, "*");
+parent.postMessage({ type: "fcl-result", runId: window.__fcl_runId, result: __fcl }, "*");
 `;
 
 function escapeScript(code: string): string {
@@ -116,6 +116,9 @@ export default function ChallengeRunner({
   const resultRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settledRef = useRef(false);
+  const runningRef = useRef(false);
+  // 运行序号:每次 run 递增,iframe 结果消息携带该序号,过期结果丢弃
+  const runIdRef = useRef(0);
   const hasSeed = Boolean(seedBefore || seedAfter);
 
   useEffect(() => {
@@ -151,7 +154,11 @@ export default function ChallengeRunner({
   const handleMessage = useCallback(
     (e: MessageEvent) => {
       if (e.data?.type !== "fcl-result") return;
+      // 只接受当前 iframe、当前运行序号的结果,丢弃过期/伪造消息
+      if (e.source !== iframeRef.current?.contentWindow) return;
+      if (e.data.runId !== runIdRef.current) return;
       if (timerRef.current) clearTimeout(timerRef.current);
+      runningRef.current = false;
       setRunning(false);
       setResult(e.data.result as TestResult);
       settledRef.current = true;
@@ -180,12 +187,16 @@ export default function ChallengeRunner({
 
   async function run() {
     if (!tests) return;
+    // 防重入:运行中忽略再次触发(含 Ctrl+Enter 快捷键)
+    if (runningRef.current) return;
+    runningRef.current = true;
     if (timerRef.current) clearTimeout(timerRef.current);
     setResult(null);
     setTimeoutMsg(false);
     setRunning(true);
     settledRef.current = false;
     setAttempts((n) => n + 1);
+    const runId = ++runIdRef.current;
 
     // 编辑区代码(用户实际改动部分):freeCodeCamp 的 code 变量,测试可用正则/字符串断言
     const editable = extractEditableCode(code);
@@ -304,11 +315,20 @@ ${HARNESS_SUFFIX}
     }
 
     const iframe = iframeRef.current;
-    if (!iframe) return;
-    iframe.srcdoc = body;
+    if (!iframe) {
+      runningRef.current = false;
+      setRunning(false);
+      return;
+    }
+    // 把本次运行序号注入 iframe,结果消息回传时携带
+    iframe.srcdoc = body.replace(
+      "<script>",
+      `<script>window.__fcl_runId = ${runId};`
+    );
 
     timerRef.current = setTimeout(() => {
       if (!settledRef.current) {
+        runningRef.current = false;
         setRunning(false);
         setTimeoutMsg(true);
         iframe.srcdoc = "";

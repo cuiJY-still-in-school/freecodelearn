@@ -53,7 +53,7 @@ export async function POST(
         await saveCourse(course);
         return NextResponse.json(
           { status: "error", error: course.generationError },
-          { status: 200 }
+          { status: 500 }
         );
       }
     }
