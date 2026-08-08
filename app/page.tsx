@@ -389,6 +389,10 @@ export default function HomePage() {
   }
 
   async function regenerateOutline() {
+    const ok = window.confirm(
+      "将重新生成一份全新大纲,当前对章节的编辑会丢失。确定重新生成?"
+    );
+    if (!ok) return;
     setOutline(null);
     setFormError("");
     await runGeneration();
@@ -813,6 +817,20 @@ export default function HomePage() {
                   {goal.trim().length > 40 ? "…" : ""}
                 </span>
               )}
+            </div>
+            <div className="mt-3 flex items-start gap-2 rounded-xl border border-dashed border-accent/30 bg-accent-soft/30 px-4 py-2.5 text-xs leading-relaxed text-ink-soft">
+              <span>💡</span>
+              <span>
+                不满意这份大纲?点下方
+                <button
+                  type="button"
+                  onClick={regenerateOutline}
+                  className="mx-1 rounded-md border border-accent/40 px-1.5 py-0.5 text-accent transition hover:bg-accent hover:text-white"
+                >
+                  ↻ 换个大纲
+                </button>
+                让 AI 重新生成;也可以直接编辑章节标题、调整顺序或删除章节。
+              </span>
             </div>
 
             <div className="mt-6 space-y-4">
