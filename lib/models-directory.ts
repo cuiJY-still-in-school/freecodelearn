@@ -8,15 +8,16 @@ export interface ProviderInfo {
   modelCount: number;
 }
 
-// 内置兜底预设(models.dev 不可达时使用)
-export const FALLBACK_PROVIDERS: ProviderInfo[] = [
-  { name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", defaultModel: "deepseek-chat", modelCount: 1 },
-  { name: "OpenAI", baseUrl: "https://api.openai.com/v1", defaultModel: "gpt-4o-mini", modelCount: 1 },
-  { name: "Anthropic", baseUrl: "https://api.anthropic.com", defaultModel: "claude-sonnet-4-20250514", modelCount: 1 },
-  { name: "通义千问", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", defaultModel: "qwen-plus", modelCount: 1 },
-  { name: "Kimi", baseUrl: "https://api.moonshot.cn/v1", defaultModel: "moonshot-v1-8k", modelCount: 1 },
-  { name: "Ollama(本地)", baseUrl: "http://127.0.0.1:11434/v1", defaultModel: "qwen2.5", modelCount: 1 },
-];
+// 兜底:models.dev 不可达时无内置服务商,仅保留 Custom 手动填写
+export const FALLBACK_PROVIDERS: ProviderInfo[] = [];
+
+// 始终显示的「自定义」预设:点击后清空字段,由用户手动填写端点与模型
+export const CUSTOM_PROVIDER: ProviderInfo = {
+  name: "Custom(自定义)",
+  baseUrl: "",
+  defaultModel: "",
+  modelCount: 0,
+};
 
 const CACHE_KEY = "fcl-models-directory";
 const CACHE_TTL_MS = 7 * 24 * 3600_000;

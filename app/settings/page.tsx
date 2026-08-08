@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getTheme, setTheme, type Theme } from "@/lib/theme";
 import {
+  CUSTOM_PROVIDER,
   FALLBACK_PROVIDERS,
   fetchModelsDirectory,
   type ProviderInfo,
@@ -180,6 +181,14 @@ export default function SettingsPage() {
           className="mb-4 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
         <div className="mb-4 flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => applyPreset(CUSTOM_PROVIDER)}
+            className="rounded-full border border-dashed border-accent/40 bg-transparent px-3 py-1 text-xs text-accent transition hover:border-accent hover:bg-accent-soft/40"
+            title="手动填写 Base URL 与模型"
+          >
+            Custom(自定义)
+          </button>
           {presets === null ? (
             <span className="flex items-center gap-2 text-xs text-ink-soft">
               <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
@@ -214,7 +223,7 @@ export default function SettingsPage() {
               ? ""
               : presetSource === "models.dev"
                 ? `数据来自 models.dev(${presets.length} 家,7 天缓存),点预设填充后补 API Key 即可`
-                : "models.dev 暂不可达,使用内置预设,点预设填充后补 API Key"}
+                : "models.dev 暂不可达,可点 Custom 手动填写"}
           </span>
         </div>
         <label className="mb-1.5 block text-sm font-medium text-ink">
