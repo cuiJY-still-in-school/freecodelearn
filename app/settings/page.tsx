@@ -4,11 +4,86 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getTheme, setTheme, type Theme } from "@/lib/theme";
 import {
-  CUSTOM_PROVIDER,
   FALLBACK_PROVIDERS,
   fetchModelsDirectory,
   type ProviderInfo,
 } from "@/lib/models-directory";
+
+// 自建可滚动搜索下拉(datalist 在桌面端有滚动与报错问题,弃用)
+function SearchDropdown({
+  options,
+  placeholder,
+  value,
+  onPick,
+  disabled,
+  emptyHint,
+}: {
+  options: { value: string; sub?: string }[];
+  placeholder: string;
+  value: string;
+  onPick: (v: string) => void;
+  disabled?: boolean;
+  emptyHint?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  useEffect(() => setQ(value), [value]);
+  const filtered = q
+    ? options.filter(
+        (o) =>
+          o.value.toLowerCase().includes(q.toLowerCase()) ||
+          (o.sub ?? "").toLowerCase().includes(q.toLowerCase())
+      )
+    : options;
+  return (
+    <div className="relative mb-3">
+      <input
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => {
+          setQ("");
+          setOpen(true);
+        }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-50"
+      />
+      {open && !disabled && (
+        <ul className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-line bg-card py-1 shadow-lg">
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-xs text-ink-soft">
+              {emptyHint ?? "无匹配项"}
+            </li>
+          ) : (
+            filtered.map((o) => (
+              <li
+                key={o.value}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onPick(o.value);
+                  setOpen(false);
+                  setQ("");
+                }}
+                className="cursor-pointer px-3 py-2 text-sm text-ink transition hover:bg-accent-soft/50"
+              >
+                <span className="block">{o.value}</span>
+                {o.sub && (
+                  <span className="block truncate text-[11px] text-ink-soft">
+                    {o.sub}
+                  </span>
+                )}
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const [theme, setThemeState] = useState<Theme>("system");
@@ -25,9 +100,8 @@ export default function SettingsPage() {
   const [presets, setPresets] = useState<ProviderInfo[] | null>(null);
   const [presetSource, setPresetSource] = useState<"models.dev" | "builtin">("models.dev");
   const [refreshing, setRefreshing] = useState(false);
-  const [providerQuery, setProviderQuery] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<ProviderInfo | null>(null);
-  const [modelQuery, setModelQuery] = useState("");
+  const [catalogMode, setCatalogMode] = useState(true);
 
   // 连接测试
   const [testing, setTesting] = useState(false);
@@ -60,25 +134,11 @@ export default function SettingsPage() {
     });
   }, []);
 
-  function applyPreset(p: ProviderInfo) {
-    setProvider(p.name);
-    setBaseUrl(p.baseUrl);
-    setModel(p.defaultModel);
-    setParseMethod(p.name === "Anthropic" ? "anthropic" : "openai");
-  }
-
-  // 服务商选择:精确匹配即应用;用户手输不匹配则视为自定义名称,不覆盖端点
+  // 服务商选择:选中即填充表单;手输不匹配则视为自定义名称,不覆盖端点
   function onProviderPick(raw: string) {
     const hit = presets?.find((p) => p.name === raw.trim());
-    if (!hit) {
-      setSelectedProvider(null);
-      setModelQuery("");
-      setProvider(raw.trim());
-      return;
-    }
+    if (!hit) return;
     setSelectedProvider(hit);
-    setProviderQuery(hit.name);
-    setModelQuery(hit.defaultModel);
     setProvider(hit.name);
     setBaseUrl(hit.baseUrl);
     setModel(hit.defaultModel);
@@ -87,7 +147,6 @@ export default function SettingsPage() {
 
   function onModelPick(raw: string) {
     const m = raw.trim();
-    setModelQuery(m);
     if (m && selectedProvider?.models.includes(m)) setModel(m);
   }
 
@@ -199,7 +258,7 @@ export default function SettingsPage() {
           ))}
         </div>
         <label className="mb-1.5 block text-sm font-medium text-ink">
-          provider
+          服务商名称(Provider)
         </label>
         <input
           value={provider}
@@ -207,89 +266,103 @@ export default function SettingsPage() {
           placeholder="DeepSeek / OpenAI / Anthropic / 自定义..."
           className="mb-4 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
-        <div className="mb-4 rounded-xl border border-line bg-bg-subtle/60 p-4">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <label className="text-sm font-medium text-ink">AI 服务商(models.dev)</label>
-            <button
-              type="button"
-              onClick={refreshDirectory}
-              disabled={refreshing}
-              className="rounded-full border border-dashed border-line px-3 py-1 text-xs text-ink-soft transition hover:border-accent/50 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
-              title="重新拉取 models.dev 最新服务商与模型"
-            >
-              {refreshing ? "刷新中..." : "🔄 更新目录"}
-            </button>
-          </div>
+        <div className="mb-2 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setCatalogMode(true)}
+            className={`rounded-xl border px-4 py-2.5 text-sm transition ${
+              catalogMode
+                ? "border-accent bg-accent-soft font-semibold text-accent"
+                : "border-line bg-bg text-ink-soft hover:border-accent/40 hover:text-ink"
+            }`}
+          >
+            AI 服务商目录
+          </button>
+          <button
+            type="button"
+            onClick={() => setCatalogMode(false)}
+            className={`rounded-xl border px-4 py-2.5 text-sm transition ${
+              !catalogMode
+                ? "border-accent bg-accent-soft font-semibold text-accent"
+                : "border-line bg-bg text-ink-soft hover:border-accent/40 hover:text-ink"
+            }`}
+          >
+            手动配置(Custom)
+          </button>
+        </div>
 
-          {presets === null ? (
-            <span className="flex items-center gap-2 text-xs text-ink-soft">
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
-              正在获取 models.dev 模型目录...
-            </span>
-          ) : (
-            <>
-              <label className="mb-1 block text-xs text-ink-soft">
-                服务商(可输入名称搜索,共 {presets.length} 家)
+        {catalogMode ? (
+          <div className="mb-4 rounded-xl border border-line bg-bg-subtle/60 p-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <label className="text-sm font-medium text-ink">
+                AI 服务商(models.dev)
               </label>
-              <input
-                list="fcl-providers"
-                value={providerQuery}
-                onChange={(e) => onProviderPick(e.target.value)}
-                placeholder="如 DeepSeek / OpenAI / Anthropic / 通义..."
-                className="mb-3 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
-              />
-              <datalist id="fcl-providers">
-                {presets.map((p) => (
-                  <option key={p.name} value={p.name}>
-                    {p.baseUrl} · {p.modelCount} 个模型
-                  </option>
-                ))}
-              </datalist>
-
-              <label className="mb-1 block text-xs text-ink-soft">
-                模型(选择服务商后自动列出全部模型)
-              </label>
-              <input
-                list="fcl-models"
-                value={modelQuery}
-                onChange={(e) => onModelPick(e.target.value)}
-                disabled={!selectedProvider}
-                placeholder={
-                  selectedProvider
-                    ? `共 ${selectedProvider.modelCount} 个模型,可输入搜索`
-                    : "先在上方选择服务商"
-                }
-                className="mb-3 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-              <datalist id="fcl-models">
-                {selectedProvider?.models.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
-
               <button
                 type="button"
-                onClick={() => {
-                  applyPreset(CUSTOM_PROVIDER);
-                  setSelectedProvider(null);
-                  setProviderQuery("");
-                  setModelQuery("");
-                }}
-                className="rounded-full border border-dashed border-accent/40 bg-transparent px-3 py-1 text-xs text-accent transition hover:border-accent hover:bg-accent-soft/40"
-                title="手动填写 Base URL 与模型"
+                onClick={refreshDirectory}
+                disabled={refreshing}
+                className="rounded-full border border-dashed border-line px-3 py-1 text-xs text-ink-soft transition hover:border-accent/50 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+                title="重新拉取 models.dev 最新服务商与模型"
               >
-                Custom(自定义)
+                {refreshing ? "刷新中..." : "🔄 更新目录"}
               </button>
-              <span className="ml-2 self-center text-[11px] text-ink-soft/70">
-                {presetSource === "models.dev"
-                  ? `数据来自 models.dev,7 天缓存,选中即填充`
-                  : "models.dev 暂不可达,可点 Custom 手动填写"}
+            </div>
+
+            {presets === null ? (
+              <span className="flex items-center gap-2 text-xs text-ink-soft">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+                正在获取 models.dev 模型目录...
               </span>
-            </>
-          )}
-        </div>
+            ) : (
+              <>
+                <label className="mb-1 block text-xs text-ink-soft">
+                  服务商(可输入名称搜索,共 {presets.length} 家)
+                </label>
+                <SearchDropdown
+                  options={presets.map((p) => ({
+                    value: p.name,
+                    sub: `${p.baseUrl} · ${p.modelCount} 个模型`,
+                  }))}
+                  placeholder="如 DeepSeek / OpenAI / Anthropic / 通义..."
+                  value={selectedProvider?.name ?? ""}
+                  onPick={onProviderPick}
+                />
+
+                <label className="mb-1 block text-xs text-ink-soft">
+                  模型(服务商全部模型,可输入搜索)
+                </label>
+                <SearchDropdown
+                  options={selectedProvider
+                    ? selectedProvider.models.map((m) => ({ value: m }))
+                    : []}
+                  placeholder={
+                    selectedProvider
+                      ? `共 ${selectedProvider.modelCount} 个模型,点击选择`
+                      : "先在上方选择服务商"
+                  }
+                  value={selectedProvider?.defaultModel ?? ""}
+                  onPick={onModelPick}
+                  disabled={!selectedProvider}
+                  emptyHint="该服务商无匹配模型"
+                />
+
+                <span className="text-[11px] text-ink-soft/70">
+                  {presetSource === "models.dev"
+                    ? `数据来自 models.dev,7 天缓存;选中后自动填入下方表单,补 API Key 即可`
+                    : "models.dev 暂不可达,可切换到「手动配置」填写"}
+                </span>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="mb-4 rounded-xl border border-line bg-bg-subtle/60 p-4 text-sm text-ink-soft">
+            手动配置模式:请在下方表单直接填写服务商名称、Base URL、
+            API Key 与模型(适用于任何 OpenAI 兼容或 Anthropic 兼容接口)。
+            也可以切换回「AI 服务商目录」一键选择。
+          </div>
+        )}
         <label className="mb-1.5 block text-sm font-medium text-ink">
-          parseMethod(协议格式)
+          协议格式(parseMethod)
         </label>
         <div className="mb-4 grid grid-cols-2 gap-2">
           {[
@@ -321,7 +394,7 @@ export default function SettingsPage() {
           className="mb-4 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
         <label className="mb-1.5 block text-sm font-medium text-ink">
-          API Key
+          API Key(密钥)
         </label>
         <input
           value={apiKey}
@@ -332,7 +405,7 @@ export default function SettingsPage() {
           required
         />
         <label className="mb-1.5 block text-sm font-medium text-ink">
-          model
+          模型(model)
         </label>
         <input
           value={model}
