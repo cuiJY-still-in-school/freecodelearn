@@ -100,6 +100,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   // 服务商目录(models.dev 实时数据,失败降级内置预设)
   const [presets, setPresets] = useState<ProviderInfo[] | null>(null);
@@ -172,6 +173,8 @@ export default function SettingsPage() {
     e.preventDefault();
     setError("");
     setSaved(false);
+    if (saving) return;
+    setSaving(true);
     try {
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -184,6 +187,8 @@ export default function SettingsPage() {
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -191,7 +196,12 @@ export default function SettingsPage() {
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch("/api/ai/test", { method: "POST" });
+      // 测试表单当前值(未保存也生效)
+      const res = await fetch("/api/ai/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, baseUrl, apiKey, model, parseMethod }),
+      });
       const data = await res.json();
       setTestResult(data);
     } catch {
@@ -412,7 +422,7 @@ export default function SettingsPage() {
           type="password"
           placeholder="sk-..."
           className="mb-4 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
-          required
+
         />
         <label className="mb-1.5 block text-sm font-medium text-ink">
           模型(model)
@@ -422,7 +432,7 @@ export default function SettingsPage() {
           onChange={(e) => setModel(e.target.value)}
           placeholder="gpt-4o / deepseek-chat / qwen-plus / llama3..."
           className="mb-6 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
-          required
+
         />
 
         {error && (
@@ -456,10 +466,10 @@ export default function SettingsPage() {
         <div className="flex gap-3">
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || saving}
             className="flex-1 rounded-xl bg-ink py-3 text-sm font-semibold text-bg transition hover:bg-accent disabled:opacity-40"
           >
-            保存配置
+            {saving ? "保存中..." : "保存配置"}
           </button>
           <button
             type="button"

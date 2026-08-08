@@ -139,12 +139,23 @@ export default function HomePage() {
     reason: string;
   } | null>(null);
 
+  // 课程列表加载失败展示与重试
+  const [loadError, setLoadError] = useState(false);
+
   useEffect(() => {
     fetch("/api/courses")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         setCourses(data);
         setLoading(false);
+        setLoadError(false);
+      })
+      .catch(() => {
+        setLoading(false);
+        setLoadError(true);
       });
     fetch("/api/settings")
       .then((r) => r.json())
@@ -215,8 +226,14 @@ export default function HomePage() {
   }, [router]);
 
   async function refreshCourses() {
-    const res = await fetch("/api/courses");
-    setCourses(await res.json());
+    try {
+      const res = await fetch("/api/courses");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setCourses(await res.json());
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+    }
   }
 
   async function generateCourse(e: React.FormEvent) {
@@ -437,13 +454,21 @@ export default function HomePage() {
     e.preventDefault();
     e.stopPropagation();
     if (!confirm("确定删除这门课程?进度也会一并清除。")) return;
-    localStorage.removeItem(`fcl-progress-${id}`);
-    await fetch("/api/courses", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    await refreshCourses();
+    try {
+      localStorage.removeItem(`fcl-progress-${id}`);
+      // 一并清理该课程的复习调度与浏览位置残留
+      localStorage.removeItem(`fcl-review-${id}`);
+      localStorage.removeItem(`fcl-view-${id}`);
+      const res = await fetch("/api/courses", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await refreshCourses();
+    } catch {
+      setNotice("删除失败,请重试");
+    }
   }
 
   // ---------- .fcl 导出 / 导入 ----------
@@ -1062,6 +1087,20 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+        ) : loadError ? (
+          <div className="rounded-2xl border border-dashed border-red/30 bg-card/50 p-10 text-center">
+            <span className="text-4xl">⚠️</span>
+            <p className="mt-3 font-serif text-lg font-bold">课程列表加载失败</p>
+            <p className="mt-1 text-sm text-ink-soft">
+              无法读取课程数据,请检查应用状态后重试
+            </p>
+            <button
+              onClick={refreshCourses}
+              className="mt-5 rounded-xl bg-ink px-5 py-2.5 text-sm font-semibold text-bg transition hover:bg-accent"
+            >
+              重试
+            </button>
+          </div>
         ) : courses.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line bg-card/50 p-10 text-center">
             <span className="text-4xl">📚</span>
@@ -1190,6 +1229,21 @@ export default function HomePage() {
               </Link>
               );
             })}
+          </div>
+        )}
+        {courseRows.length === 0 && courses.length > 0 && (
+          <div className="rounded-2xl border border-dashed border-line bg-card/50 p-10 text-center">
+            <span className="text-4xl">🔍</span>
+            <p className="mt-3 font-serif text-lg font-bold">没有匹配的课程</p>
+            <p className="mt-1 text-sm text-ink-soft">
+              换个关键词试试,或清除搜索
+            </p>
+            <button
+              onClick={() => setCourseQuery("")}
+              className="mt-5 rounded-xl border border-line px-5 py-2.5 text-sm font-medium text-ink-soft transition hover:border-accent/50 hover:text-accent"
+            >
+              清除搜索
+            </button>
           </div>
         )}
         </>

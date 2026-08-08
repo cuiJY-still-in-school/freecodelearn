@@ -337,13 +337,20 @@ ${HARNESS_SUFFIX}
   }
 
   function reset() {
+    // 已持久化的代码会被清空,先确认再重置
     if (persistKey) {
       try {
+        const saved = localStorage.getItem(`fcl-editor-${persistKey}`);
+        if (saved != null && saved !== initial) {
+          if (!window.confirm("重置将清空你已写的代码并恢复初始内容,确定?")) return;
+        }
         localStorage.removeItem(`fcl-editor-${persistKey}`);
       } catch {
         // 忽略存储异常
       }
     }
+    runningRef.current = false;
+    setRunning(false);
     setCode(initial);
     setResult(null);
     setTimeoutMsg(false);

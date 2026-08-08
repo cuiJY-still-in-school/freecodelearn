@@ -6,7 +6,7 @@ import type {
   OutlineStep,
   Step,
 } from "./types";
-import { getSettings, newCourseId, saveCourse } from "./store";
+import { getSettings, newCourseId, saveCourse, type AISettings } from "./store";
 
 export interface GenerateInput {
   topic: string;
@@ -156,9 +156,11 @@ challenge tests 约定(运行在浏览器沙箱中,测试内可用):
 
 async function chat(
   userPrompt: string,
-  json: boolean
+  json: boolean,
+  overrides?: Partial<AISettings>
 ): Promise<string> {
-  const settings = await getSettings();
+  const stored = await getSettings();
+  const settings = { ...(stored ?? {}), ...(overrides ?? {}) } as AISettings;
   if (!settings || !settings.apiKey) {
     throw new Error(
       "未配置 AI 服务。请先在「设置」页填写 provider / baseUrl / apiKey / model,或设置环境变量 AI_BASE_URL、AI_API_KEY、AI_MODEL"
@@ -298,8 +300,10 @@ function parseJSON(content: string): Record<string, unknown> {
 
 /* ---------- 连接测试 ---------- */
 
-export async function chatTest(): Promise<string> {
-  const content = await chat("只回复两个字:正常。不要其他任何内容。", false);
+export async function chatTest(
+  overrides?: Partial<AISettings>
+): Promise<string> {
+  const content = await chat("只回复两个字:正常。不要其他任何内容。", false, overrides);
   if (!content) throw new Error("AI 返回为空");
   return content;
 }
