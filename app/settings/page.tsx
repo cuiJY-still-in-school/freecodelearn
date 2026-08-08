@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getTheme, setTheme, type Theme } from "@/lib/theme";
+import {
+  FALLBACK_PROVIDERS,
+  fetchModelsDirectory,
+  type ProviderInfo,
+} from "@/lib/models-directory";
 
 export default function SettingsPage() {
   const [theme, setThemeState] = useState<Theme>("system");
@@ -14,6 +19,11 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // 服务商目录(models.dev 实时数据,失败降级内置预设)
+  const [presets, setPresets] = useState<ProviderInfo[] | null>(null);
+  const [presetSource, setPresetSource] = useState<"models.dev" | "builtin">("models.dev");
+  const [refreshing, setRefreshing] = useState(false);
 
   // 连接测试
   const [testing, setTesting] = useState(false);
@@ -37,6 +47,29 @@ export default function SettingsPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // 实时拉取服务商目录(缓存 7 天,失败降级内置)
+  useEffect(() => {
+    fetchModelsDirectory().then((providers) => {
+      setPresets(providers);
+      if (providers === FALLBACK_PROVIDERS) setPresetSource("builtin");
+    });
+  }, []);
+
+  function applyPreset(p: ProviderInfo) {
+    setProvider(p.name);
+    setBaseUrl(p.baseUrl);
+    setModel(p.defaultModel);
+    setParseMethod(p.name === "Anthropic" ? "anthropic" : "openai");
+  }
+
+  async function refreshDirectory() {
+    setRefreshing(true);
+    const providers = await fetchModelsDirectory(true);
+    setPresets(providers);
+    setPresetSource(providers === FALLBACK_PROVIDERS ? "builtin" : "models.dev");
+    setRefreshing(false);
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -146,32 +179,42 @@ export default function SettingsPage() {
           placeholder="DeepSeek / OpenAI / Anthropic / 自定义..."
           className="mb-4 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
-        <div className="mb-4 flex flex-wrap gap-1.5">
-          {[
-            { name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
-            { name: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
-            { name: "Anthropic", baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-20250514" },
-            { name: "通义千问", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
-            { name: "Kimi", baseUrl: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k" },
-            { name: "Ollama(本地)", baseUrl: "http://127.0.0.1:11434/v1", model: "qwen2.5" },
-          ].map((p) => (
-            <button
-              key={p.name}
-              type="button"
-              onClick={() => {
-                setProvider(p.name);
-                setBaseUrl(p.baseUrl);
-                setModel(p.model);
-                setParseMethod(p.name === "Anthropic" ? "anthropic" : "openai");
-              }}
-              className="rounded-full border border-line bg-bg px-3 py-1 text-xs text-ink-soft transition hover:border-accent/50 hover:bg-accent-soft/40 hover:text-accent"
-              title={`${p.baseUrl} · ${p.model}`}
-            >
-              {p.name}
-            </button>
-          ))}
+        <div className="mb-4 flex flex-wrap items-center gap-1.5">
+          {presets === null ? (
+            <span className="flex items-center gap-2 text-xs text-ink-soft">
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+              正在获取 models.dev 模型目录...
+            </span>
+          ) : (
+            <>
+              {presets.map((p) => (
+                <button
+                  key={p.name}
+                  type="button"
+                  onClick={() => applyPreset(p)}
+                  className="rounded-full border border-line bg-bg px-3 py-1 text-xs text-ink-soft transition hover:border-accent/50 hover:bg-accent-soft/40 hover:text-accent"
+                  title={`${p.baseUrl} · ${p.defaultModel}${p.modelCount > 1 ? `(+${p.modelCount - 1} 个模型)` : ""}`}
+                >
+                  {p.name}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={refreshDirectory}
+                disabled={refreshing}
+                className="rounded-full border border-dashed border-line px-3 py-1 text-xs text-ink-soft transition hover:border-accent/50 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+                title="重新从 models.dev 拉取最新服务商与模型"
+              >
+                {refreshing ? "刷新中..." : "🔄 更新目录"}
+              </button>
+            </>
+          )}
           <span className="self-center text-[11px] text-ink-soft/70">
-            点击预设自动填充,只需补 API Key
+            {presets === null
+              ? ""
+              : presetSource === "models.dev"
+                ? `数据来自 models.dev(${presets.length} 家,7 天缓存),点预设填充后补 API Key 即可`
+                : "models.dev 暂不可达,使用内置预设,点预设填充后补 API Key"}
           </span>
         </div>
         <label className="mb-1.5 block text-sm font-medium text-ink">
