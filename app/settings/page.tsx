@@ -27,7 +27,8 @@ function SearchDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  useEffect(() => setQ(value), [value]);
+  // 未打开时显示外部选中值,打开时显示搜索词
+  const display = open ? q : value;
   const filtered = q
     ? options.filter(
         (o) =>
@@ -38,12 +39,16 @@ function SearchDropdown({
   return (
     <div className="relative mb-3">
       <input
-        value={q}
+        value={display}
         onChange={(e) => {
           setQ(e.target.value);
           setOpen(true);
         }}
         onFocus={() => {
+          setQ("");
+          setOpen(true);
+        }}
+        onClick={() => {
           setQ("");
           setOpen(true);
         }}
@@ -101,6 +106,7 @@ export default function SettingsPage() {
   const [presetSource, setPresetSource] = useState<"models.dev" | "builtin">("models.dev");
   const [refreshing, setRefreshing] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ProviderInfo | null>(null);
+  const [selectedModel, setSelectedModel] = useState("");
   const [catalogMode, setCatalogMode] = useState(true);
 
   // 连接测试
@@ -139,6 +145,7 @@ export default function SettingsPage() {
     const hit = presets?.find((p) => p.name === raw.trim());
     if (!hit) return;
     setSelectedProvider(hit);
+    setSelectedModel(hit.defaultModel);
     setProvider(hit.name);
     setBaseUrl(hit.baseUrl);
     setModel(hit.defaultModel);
@@ -147,7 +154,10 @@ export default function SettingsPage() {
 
   function onModelPick(raw: string) {
     const m = raw.trim();
-    if (m && selectedProvider?.models.includes(m)) setModel(m);
+    if (m && selectedProvider?.models.includes(m)) {
+      setSelectedModel(m);
+      setModel(m);
+    }
   }
 
   async function refreshDirectory() {
@@ -340,7 +350,7 @@ export default function SettingsPage() {
                       ? `共 ${selectedProvider.modelCount} 个模型,点击选择`
                       : "先在上方选择服务商"
                   }
-                  value={selectedProvider?.defaultModel ?? ""}
+                  value={selectedModel}
                   onPick={onModelPick}
                   disabled={!selectedProvider}
                   emptyHint="该服务商无匹配模型"
