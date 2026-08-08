@@ -6,6 +6,8 @@ export interface ProviderInfo {
   baseUrl: string;
   defaultModel: string;
   modelCount: number;
+  /** 该服务商全部模型 id(models.dev 全量,用于模型选择) */
+  models: string[];
 }
 
 // 兜底:models.dev 不可达时无内置服务商,仅保留 Custom 手动填写
@@ -17,6 +19,7 @@ export const CUSTOM_PROVIDER: ProviderInfo = {
   baseUrl: "",
   defaultModel: "",
   modelCount: 0,
+  models: [],
 };
 
 const CACHE_KEY = "fcl-models-directory";
@@ -107,13 +110,15 @@ function parseDirectory(raw: string): ProviderInfo[] {
     if (!p || typeof p !== "object") continue;
     const baseUrl = String(p.api ?? "").trim();
     if (!isHttpUrl(baseUrl)) continue;
-    const { id, count } = pickDefaultModel(p.models);
-    if (!id) continue;
+    const modelIds = p.models ? Object.keys(p.models) : [];
+    if (modelIds.length === 0) continue;
+    const preferred = pickDefaultModel(p.models);
     out.push({
       name: String(p.name ?? key),
       baseUrl,
-      defaultModel: id,
-      modelCount: count,
+      defaultModel: preferred.id,
+      modelCount: modelIds.length,
+      models: modelIds,
     });
   }
   if (out.length === 0) throw new Error("模型目录无可用服务商");
