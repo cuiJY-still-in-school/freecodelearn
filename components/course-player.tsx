@@ -671,13 +671,11 @@ export default function CoursePlayer({ course }: { course: Course }) {
               {!step.tests && (
                 <button
                   onClick={() => {
-                    const chapterDone = markDone(step.id, "done");
-                    if (next && !chapterDone)
-                      window.setTimeout(() => goTo(next), 700);
+                    markDone(step.id, "done");
                   }}
                   className="mt-4 rounded-xl border border-line px-4 py-2 text-sm text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
                 >
-                  {next ? "完成本节,继续 →" : "标记为已完成"}
+                  标记为已完成
                 </button>
               )}
             </div>
@@ -705,26 +703,22 @@ export default function CoursePlayer({ course }: { course: Course }) {
             ) : (
               <button
                 onClick={() => {
-                  const chapterDone = markDone(step.id, "done");
-                  if (next && !chapterDone)
-                    window.setTimeout(() => goTo(next), 700);
+                  markDone(step.id, "done");
                 }}
                 className="rounded-xl border border-line px-4 py-2 text-sm text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
               >
-                {next ? "完成本节,继续 →" : "标记为已完成"}
+                标记为已完成
               </button>
             ))}
 
           {step.type === "lesson" && (
             <button
               onClick={() => {
-                const chapterDone = markDone(step.id, "done");
-                if (next && !chapterDone)
-                  window.setTimeout(() => goTo(next), 700);
+                markDone(step.id, "done");
               }}
               className="rounded-xl border border-line px-4 py-2 text-sm text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
             >
-              {next ? "完成本节,继续 →" : "标记为已完成"}
+              标记为已完成
             </button>
           )}
             </>
@@ -745,8 +739,8 @@ export default function CoursePlayer({ course }: { course: Course }) {
             {next && !isDone ? (
               <button
                 onClick={() => {
-                  markDone(step.id, "done");
-                  goTo(next);
+                  const chapterDone = markDone(step.id, "done");
+                  if (!chapterDone) goTo(next);
                 }}
                 className="rounded-xl bg-ink px-6 py-2.5 text-sm font-semibold text-bg transition hover:bg-accent"
               >
