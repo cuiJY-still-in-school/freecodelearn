@@ -134,7 +134,17 @@ function readCache(): ProviderInfo[] | null {
       typeof parsed?.fetchedAt === "number" &&
       Date.now() - parsed.fetchedAt < CACHE_TTL_MS &&
       Array.isArray(parsed.providers) &&
-      parsed.providers.length > 0
+      parsed.providers.length > 0 &&
+      // 旧版本缓存缺 models 字段,视为无效,触发重新拉取
+      parsed.providers.every(
+        (p) =>
+          p &&
+          typeof p === "object" &&
+          typeof p.name === "string" &&
+          typeof p.baseUrl === "string" &&
+          typeof p.defaultModel === "string" &&
+          Array.isArray(p.models)
+      )
     ) {
       return parsed.providers;
     }

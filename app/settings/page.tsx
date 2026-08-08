@@ -154,7 +154,7 @@ export default function SettingsPage() {
 
   function onModelPick(raw: string) {
     const m = raw.trim();
-    if (m && selectedProvider?.models.includes(m)) {
+    if (m && selectedProvider?.models?.includes(m)) {
       setSelectedModel(m);
       setModel(m);
     }
@@ -342,7 +342,7 @@ export default function SettingsPage() {
                   模型(服务商全部模型,可输入搜索)
                 </label>
                 <SearchDropdown
-                  options={selectedProvider
+                  options={selectedProvider?.models
                     ? selectedProvider.models.map((m) => ({ value: m }))
                     : []}
                   placeholder={
