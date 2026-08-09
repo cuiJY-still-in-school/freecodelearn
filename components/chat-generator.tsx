@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { CourseOutline } from "@/lib/types";
-import OutlineCard from "./outline-card";
 import {
   analyzeChat,
   narrateChat,
@@ -11,6 +11,7 @@ import {
   type ChatTurn,
   type LearnerProfile,
 } from "@/lib/chat";
+import { saveDraft, loadDraft } from "@/lib/drafts";
 
 type ChatMessageInput =
   | { role: "user"; content: string }
@@ -45,44 +46,45 @@ interface Snapshot {
 }
 
 export default function ChatGenerator({ courseList, onCourseCreated }: ChatGeneratorProps) {
-  // 惰性初始化:挂载时一次性读取上次会话快照(生成中途离开页面后恢复)
-  const [snap] = useState<Snapshot | null>(() => {
+  const router = useRouter();
+  // 快照恢复:Next 16 静态预渲染页会双挂载,因此这里只读不删(幂等);
+  // 快照在课程生成成功时删除(大纲页 confirm 已清理)
+  const readSnap = (): Snapshot | null => {
     if (typeof window === "undefined") return null;
-    const raw = sessionStorage.getItem(SNAP_KEY);
-    if (!raw) return null;
     try {
+      const raw = sessionStorage.getItem(SNAP_KEY);
+      if (!raw) return null;
       const s = JSON.parse(raw) as Snapshot;
-      sessionStorage.removeItem(SNAP_KEY);
-      return s;
+      return s && Array.isArray(s.messages) ? s : null;
     } catch {
-      sessionStorage.removeItem(SNAP_KEY);
       return null;
     }
-  });
-  const [messages, setMessages] = useState<ChatMessage[]>(() =>
-    snap
-      ? (snap.messages ?? []).map((m) =>
+  };
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const s = readSnap();
+    return s
+      ? s.messages.map((m) =>
           m.role === "outline" && m.busy === "generating"
             ? {
                 ...m,
                 busy: "idle" as const,
                 editable: true,
-                error: "第一章生成因切换页面而中断,请重新确认大纲",
+                error: "第一章生成因切换页面而中断,请到大纲页重新确认",
               }
             : m
         )
-      : []
-  );
+      : [];
+  });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [chips, setChips] = useState<string[] | null>(null);
-  const [refDoc, setRefDoc] = useState<{ name: string; text: string } | null>(
-    () => snap?.refDoc ?? null
+  const [refDoc, setRefDoc] = useState<{ name: string; text: string } | null>(() =>
+    readSnap()?.refDoc ?? null
   );
   const [refDocError, setRefDocError] = useState("");
   const [sessionError, setSessionError] = useState("");
-  const [researchNote, setResearchNote] = useState(() => snap?.researchNote ?? "");
-  const [profile, setProfile] = useState<LearnerProfile>(() => snap?.profile ?? {});
+  const [researchNote, setResearchNote] = useState(() => readSnap()?.researchNote ?? "");
+  const [profile, setProfile] = useState<LearnerProfile>(() => readSnap()?.profile ?? {});
 
   const statusIdRef = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -252,7 +254,10 @@ export default function ChatGenerator({ courseList, onCourseCreated }: ChatGener
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "大纲生成失败");
-    push({ role: "outline", outline: data as CourseOutline, params: r, editable: true, busy: "idle" });
+    const outline = data as CourseOutline;
+    // 写入独立大纲草稿(大纲页全屏查看/编辑/确认,不再塞进聊天流)
+    saveDraft({ outline, params: r, profile, createdAt: Date.now() });
+    push({ role: "outline", outline, params: r, editable: true, busy: "idle" });
   };
 
   // ---------- 发送 ----------
@@ -272,12 +277,26 @@ export default function ChatGenerator({ courseList, onCourseCreated }: ChatGener
     try {
       if (existing?.editable) {
         // 大纲已存在:走修订,不再重新分析
-        const newOutline = await reviseChat(turns, existing.outline, {
+        // 基准大纲优先用草稿(大纲页可能编辑过);草稿更新时同步回消息
+        let base = existing.outline;
+        const draft = loadDraft();
+        if (draft && draft.outline.chapters.length > 0) {
+          base = draft.outline;
+          patch(existing.id, { outline: base });
+        }
+        patch(existing.id, { editable: false });
+        const newOutline = await reviseChat(turns, base, {
           referenceDoc: refDoc?.text,
           researchNotes: researchNote || undefined,
         });
-        patch(existing.id, { editable: false });
-        push({ role: "outline", outline: newOutline, params: existing.params, editable: true, busy: "idle" });
+        push({
+          role: "outline",
+          outline: newOutline,
+          params: existing.params,
+          editable: true,
+          busy: "idle",
+        });
+        saveDraft({ outline: newOutline, params: existing.params, profile, createdAt: Date.now() });
       } else {
         const r = await analyzeChat(turns, {
           referenceDoc: refDoc?.text,
@@ -334,84 +353,6 @@ export default function ChatGenerator({ courseList, onCourseCreated }: ChatGener
     } finally {
       setBusy(false);
       statusIdRef.current = null;
-    }
-  };
-
-  // ---------- 大纲卡片操作 ----------
-
-  const patchOutlineChapter = (ci: number, p: Partial<CourseOutline["chapters"][number]>) => {
-    const o = lastOutline();
-    if (!o) return;
-    const outline = {
-      ...o.outline,
-      chapters: o.outline.chapters.map((c, i) => (i === ci ? { ...c, ...p } : c)),
-    };
-    patch(o.id, { outline });
-  };
-  const moveChapter = (ci: number, dir: -1 | 1) => {
-    const o = lastOutline();
-    if (!o) return;
-    const chs = [...o.outline.chapters];
-    const j = ci + dir;
-    if (j < 0 || j >= chs.length) return;
-    [chs[ci], chs[j]] = [chs[j], chs[ci]];
-    patch(o.id, { outline: { ...o.outline, chapters: chs } });
-  };
-  const removeChapter = (ci: number) => {
-    const o = lastOutline();
-    if (!o) return;
-    if (!window.confirm("删除该章节后不可恢复,确认?")) return;
-    if (o.outline.chapters.length <= 1) return;
-    patch(o.id, {
-      outline: { ...o.outline, chapters: o.outline.chapters.filter((_, i) => i !== ci) },
-    });
-  };
-
-  // 确认大纲 → 生成第一章 → 进入课程
-  const confirmOutline = async () => {
-    const o = lastOutline();
-    if (!o || o.busy === "generating") return;
-    patch(o.id, { busy: "generating", error: undefined });
-    try {
-      const res = await fetch("/api/ai/chapter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outline: o.outline, chapterIndex: 0 }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "第一章生成失败");
-      const saveRes = await fetch("/api/ai/assemble", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outline: o.outline, chapters: [data.steps] }),
-      });
-      const saved = await saveRes.json();
-      if (!saveRes.ok) throw new Error(saved.error ?? "课程保存失败");
-      sessionStorage.removeItem(SNAP_KEY);
-      onCourseCreated(saved.id);
-    } catch (err) {
-      patch(o.id, {
-        busy: "idle",
-        error: err instanceof Error ? err.message : "课程生成失败",
-      });
-    }
-  };
-
-  // 换个大纲:用同一参数重新生成(不复用研究,避免太久)
-  const regenerateOutline = async () => {
-    const o = lastOutline();
-    if (!o || o.busy === "generating") return;
-    if (!window.confirm("将重新生成一份全新大纲,当前对章节的编辑会丢失。确定重新生成?")) return;
-    patch(o.id, { editable: false });
-    setBusy(true);
-    setSessionError("");
-    try {
-      await runOutlineFlow(o.params);
-    } catch (err) {
-      setSessionError(err instanceof Error ? err.message : "大纲重新生成失败");
-      patch(o.id, { editable: true });
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -473,22 +414,38 @@ export default function ChatGenerator({ courseList, onCourseCreated }: ChatGener
               );
             }
             if (m.role === "outline") {
+              const totalSteps = m.outline.chapters.reduce((a, c) => a + c.steps.length, 0);
               return (
                 <div key={m.id} className="flex justify-start">
-                  <div className="w-full">
-                    <OutlineCard
-                      outline={m.outline}
-                      editable={m.editable}
-                      busy={m.busy}
-                      error={m.error}
-                      researched={Boolean(researchNote)}
-                      goal={m.params.goal}
-                      onEditChapter={patchOutlineChapter}
-                      onMoveChapter={moveChapter}
-                      onRemoveChapter={removeChapter}
-                      onConfirm={confirmOutline}
-                      onRegenerate={regenerateOutline}
-                    />
+                  <div className="w-full max-w-[90%] rounded-2xl rounded-bl-sm border border-accent/30 bg-accent-soft/30 px-4 py-3.5">
+                    <p className="text-xs font-medium tracking-wide text-accent">📋 大纲已就绪 · 请确认</p>
+                    <h3 className="mt-1 font-serif text-base font-bold leading-snug text-ink">
+                      {m.outline.title}
+                    </h3>
+                    <p className="mt-1 text-xs text-ink-soft">
+                      {m.outline.language} · {m.outline.chapters.length} 章 · 共 {totalSteps} 步 · 约{" "}
+                      {m.outline.estimatedMinutes} 分钟
+                    </p>
+                    {m.busy === "generating" ? (
+                      <div className="mt-3 flex items-center gap-2 text-xs text-ink-soft">
+                        <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+                        第一章生成因切换页面而中断,请到大纲页重新确认
+                      </div>
+                    ) : (
+                      <>
+                        <p className="mt-2 text-xs leading-relaxed text-ink-soft">
+                          大纲已独立成页,方便你完整浏览章节与步骤、确认生成。
+                          <br />
+                          不满意?直接编辑大纲,或在聊天里继续提修改意见。
+                        </p>
+                        <button
+                          onClick={() => router.push("/outline/draft")}
+                          className="mt-3 rounded-xl bg-ink px-5 py-2.5 text-xs font-semibold text-bg transition hover:bg-accent"
+                        >
+                          查看并确认大纲 →
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               );

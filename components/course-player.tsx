@@ -483,9 +483,13 @@ export default function CoursePlayer({ course }: { course: Course }) {
                 🗂 待复习 {reviewItems.length}
               </button>
             )}
-            <span className="shrink-0 font-mono text-xs text-ink-soft">
-              {doneCount}/{total} · {pct}%
-            </span>
+            <div className="shrink-0 text-right leading-tight">
+              <span className="block font-mono text-sm font-bold text-ink">
+                {isDone ? "已完成" : `第 ${doneCount + 1} 步`}
+                <span className="text-ink-soft"> / {total}</span>
+              </span>
+              <span className="block font-mono text-[10px] text-ink-soft">{doneCount}/{total} · {pct}%</span>
+            </div>
           </div>
         </div>
 
