@@ -1,4 +1,5 @@
 import type { CourseOutline } from "./types";
+import type { TechStackEntry } from "./techstack-library";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -15,6 +16,8 @@ export interface AnalyzeResult {
   goal: string;
   extra: string;
   techStack: string[];
+  techStackIds: string[];
+  techStackEntry: TechStackEntry | null;
   refCourseId: string;
 }
 
@@ -38,7 +41,7 @@ export async function analyzeChat(
 
 /** 流式读取设计说明(SSE),逐块回调文本 */
 export async function narrateChat(
-  params: { topic: string; techStack: string[]; goal: string },
+  params: { topic: string; techStack: string[]; goal: string; reason?: string },
   onChunk: (text: string) => void
 ): Promise<void> {
   const res = await fetch("/api/ai/chat/narrate", {

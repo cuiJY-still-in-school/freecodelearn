@@ -7,6 +7,7 @@ import type {
   Step,
 } from "./types";
 import { getSettings, newCourseId, saveCourse, type AISettings } from "./store";
+import { techStackCatalog, getTechStack, type TechStackEntry } from "./techstack-library";
 
 export interface GenerateInput {
   topic: string;
@@ -22,6 +23,8 @@ export interface GenerateInput {
   referenceDoc?: string;
   /** 参考已有课程的结构摘要(用于风格/结构定制) */
   referenceCourse?: string;
+  /** 对话阶段 AI 选定的技术栈(来自技术栈库,大纲必须围绕它设计) */
+  techStack?: TechStackEntry;
 }
 
 const SYSTEM_PROMPT = `你是课程设计专家,擅长设计 freeCodeCamp 风格的循序渐进编程课程。`;
@@ -478,9 +481,13 @@ export async function researchQuery(
 export async function generateOutline(input: GenerateInput): Promise<CourseOutline> {
   const refDoc = (input.referenceDoc ?? "").slice(0, 30000);
   const researchNotes = (input.researchNotes ?? "").slice(0, 30000);
+  const stack =
+    input.techStack && input.techStack.id
+      ? `\n\n已选定技术栈(必须严格围绕它设计整门课程,语言、示例、项目主线均以它为准):\n"""\n栈名:${input.techStack.name}\n语言:${input.techStack.languages.join("、")}\n能干什么:${input.techStack.description}\n典型课程主线(项目式):${input.techStack.typicalProjects.join(" / ")}\n难度定位:${input.techStack.difficulty}\n"""\n大纲的 language 字段必须写该栈的主语言,项目主线优先贴近上述典型示例,难度与该栈的难度定位一致`
+      : "";
   const userPrompt = `${systemContext()}\n\n请设计课程大纲。\n主题:${input.topic}\n难度:${input.level}${
     input.goal ? `\n学习目标:${input.goal}` : ""
-  }${input.description ? `\n补充说明:${input.description}` : ""}${
+  }${input.description ? `\n补充说明:${input.description}` : ""}${stack}${
     refDoc
       ? `\n\n参考文档(课程内容必须取材于此,术语/示例/工作流保持一致):\n"""\n${refDoc}\n"""`
       : ""
@@ -495,7 +502,12 @@ export async function generateOutline(input: GenerateInput): Promise<CourseOutli
   }\n\n${OUTLINE_TASK}`;
 
   const content = await chat(userPrompt, true);
-  return parseOutlineRaw(content, input);
+  const outline = parseOutlineRaw(content, input);
+  // 已选定技术栈时,语言以栈为准(保证与栈的示例/工具链一致)
+  if (input.techStack?.languages?.length) {
+    outline.language = input.techStack.languages[0];
+  }
+  return outline;
 }
 
 /** 从 AI 输出中解析课程大纲(共用:全新生成与对话修订都走这里) */
@@ -975,6 +987,10 @@ export interface AnalyzeResult {
   goal: string;
   extra: string;
   techStack: string[];
+  /** 从技术栈库中选出的栈 id(按匹配度排序,1-3 个,主选在前) */
+  techStackIds: string[];
+  /** 主选技术栈的完整条目(服务端从库中查出,供客户端展示与大纲生成) */
+  techStackEntry: TechStackEntry | null;
   refCourseId: string;
 }
 
@@ -988,14 +1004,26 @@ const ANALYZE_TASK = `你是课程需求分析助手,用户通过对话描述想
   "level": "beginner|intermediate|advanced",
   "goal": "学习目标:用户希望学完达到什么效果(没有则空)",
   "extra": "补充约束:技术栈偏好、内容侧重、参考课程等(没有则空)",
-  "techStack": ["AI 选定的技术栈:语言/框架/工具,2-4 项"],
+  "techStack": ["AI 选定的技术栈:语言/框架/工具,2-4 项(说明用,最终以 techStackIds 为准)"],
+  "techStackIds": ["从下方技术栈目录中选出的最匹配栈 id,1-3 个,按匹配度从高到低;必须严格使用目录中存在的 id"],
   "refCourseId": "用户想参考的已有课程 id(从提供的课程列表中匹配;没有则空)"
 }
 
-规则:
+技术栈目录(每行:id | 名称 | 标签 | 难度 | 能干什么):
+${techStackCatalog()}
+
+选栈规则(根据标签与用户的匹配度):
+1. 理解用户的个性化需求:编程经验、学习目标、时间投入、平台、语言偏好、领域场景;把这些需求翻译成目录中的标签(领域标签如 爬虫/Web前端/数据分析/自动化/命令行/游戏开发/桌面应用/算法/AI应用/DevOps;属性标签如 入门友好/零配置/生产级/需编程基础/教学资料丰富)
+2. 从目录中挑选 1-3 个与用户需求标签匹配度最高的栈,按匹配度排序;主选 = 最贴合的一个
+3. 匹配要点:零基础用户 → 优先「入门友好」「零配置」标签且 difficulty=beginner;有基础用户 → 按其领域偏好与已有语言(如会 JS 选含 JavaScript 的栈);用户平台是 Windows 时避开标为 linux/macos 的栈;用户指定语言时只选该语言的栈;用户想要「能做出成品/找工作」→ 优先「生产级」;「学得有趣」→ 优先「趣味性强」
+4. 用户没提任何偏好时,按该领域最主流、最适合入门的栈选(如爬虫→python-requests、网页→html-css-js、数据分析→python-pandas)
+5. 目录中找不到合适的栈时:选最接近的 1 个,并在 techStack 里补充说明缺什么;绝不要编造目录外的 id
+6. techStackIds 与 techStack 要保持一致(techStack 用中文名描述)
+
+其他规则:
 1. 主题把关:主题与编程/技术学习无关(如烹饪、健身、音乐)时 action=reject,reason 说明;无法确定时偏向通过
 2. 只有真正缺关键信息(学什么不明确、或水平完全无法判断)才 action=ask,一次只问一个最关键的问题,并给出 2-3 个快捷回复选项;能推断就推断,不要连珠炮提问
-3. 信息足够时 action=outline,并替用户决策:AI 根据用户描述与业界惯例选择最合适的技术栈(用户没指定语言时,选该领域最主流、最适合入门的组合,如爬虫→Python+requests)
+3. 信息足够时 action=outline,并按上面的选栈规则替用户决策
 4. level 推断:从未写过代码=beginner,有基础但换新领域=intermediate,专业开发者或明确要求=advanced;推断不出时给 beginner
 5. goal 用一句话总结用户想要的成果;extra 记录其余约束;用户没提的字段留空,不要编造
 6. 用户提到「参考我学过的《课程名》」时,从课程列表中匹配最近似的 id 填入 refCourseId,匹配不到就留空
@@ -1027,6 +1055,12 @@ export async function analyzeChat(
     .map((s) => String(s).slice(0, 60))
     .filter(Boolean)
     .slice(0, 3);
+  // 校验技术栈 id 必须真实存在于库中,按目录顺序保留前 3 个
+  const techStackIds = (Array.isArray(raw.techStackIds) ? raw.techStackIds : [])
+    .map((s) => String(s).trim())
+    .filter((id) => Boolean(getTechStack(id)))
+    .slice(0, 3);
+  const techStackEntry = techStackIds[0] ? getTechStack(techStackIds[0]) ?? null : null;
   return {
     action,
     reason: raw.reason ? String(raw.reason).slice(0, 200) : "",
@@ -1042,6 +1076,8 @@ export async function analyzeChat(
       .map((s) => String(s).slice(0, 40))
       .filter(Boolean)
       .slice(0, 4),
+    techStackIds,
+    techStackEntry,
     refCourseId: String(raw.refCourseId ?? "").slice(0, 64),
   };
 }
@@ -1050,16 +1086,21 @@ const NARRATE_TASK = (params: {
   topic: string;
   techStack: string[];
   goal: string;
+  reason?: string;
 }) => `你是课程设计师。用 120-200 字向学习者说明你的课程设计思路,像一位耐心的导师:
 - 选定技术栈「${params.techStack.join("、") || "最合适的组合"}」的理由(面向目标,贴合需求)
-- 课程如何组织(项目主线、由浅入深)
+${
+  params.reason
+    ? `- 该技术栈能干什么、学完能做哪些项目:${params.reason}`
+    : ""
+}- 课程如何组织(项目主线、由浅入深)
 - 学完能获得什么
 语气简洁、有说服力,不要列点,一段话讲完。只输出正文,不要任何格式标记。
 课程主题:${params.topic}${params.goal ? `;学习目标:${params.goal}` : ""}`;
 
 /** 流式输出 AI 设计说明(SSE 事件按块回调) */
 export async function narrateDesign(
-  params: { topic: string; techStack: string[]; goal: string },
+  params: { topic: string; techStack: string[]; goal: string; reason?: string },
   onChunk: (text: string) => void,
   overrides?: Partial<AISettings>
 ): Promise<string> {

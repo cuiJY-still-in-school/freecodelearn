@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateOutline } from "@/lib/ai";
+import { getTechStack } from "@/lib/techstack-library";
 
 export async function POST(req: Request) {
   try {
@@ -14,6 +15,12 @@ export async function POST(req: Request) {
     ) {
       input.referenceDoc = input.referenceDoc.slice(0, 50_000);
     }
+    // 对话阶段选定的技术栈:按 id 从库中查出完整条目,约束大纲设计
+    if (typeof input.techStackId === "string" && input.techStackId.trim()) {
+      const entry = getTechStack(input.techStackId.trim());
+      if (entry) input.techStack = entry;
+    }
+    delete input.techStackId;
     const outline = await generateOutline(input);
     return NextResponse.json(outline);
   } catch (e) {

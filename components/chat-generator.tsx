@@ -181,9 +181,13 @@ export default function ChatGenerator({ courseList, onCourseCreated }: ChatGener
     // ① 流式设计说明(与联网检索并行)
     const noteId = push({ role: "assistant", content: "", streaming: true });
     const researchPromise = doResearch(r.topic, r.goal);
+    const entry = r.techStackEntry;
+    const reason = entry
+      ? `${entry.description}。典型课程主线:${entry.typicalProjects.slice(0, 2).join("、")}。`
+      : "";
     try {
       await narrateChat(
-        { topic: r.topic, techStack: r.techStack, goal: r.goal },
+        { topic: r.topic, techStack: r.techStack, goal: r.goal, reason },
         (t) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -238,6 +242,7 @@ export default function ChatGenerator({ courseList, onCourseCreated }: ChatGener
         researchNotes: researchNoteValue || undefined,
         referenceDoc: refDoc?.text,
         referenceCourse: refCourseSummary || undefined,
+        techStackId: r.techStackIds[0] || undefined,
       }),
     });
     const data = await res.json();
@@ -309,6 +314,8 @@ export default function ChatGenerator({ courseList, onCourseCreated }: ChatGener
         goal: "",
         extra: "",
         techStack: [],
+        techStackIds: [],
+        techStackEntry: null,
         refCourseId: "",
       });
     } catch (err) {
