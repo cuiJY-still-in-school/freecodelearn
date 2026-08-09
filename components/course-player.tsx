@@ -121,7 +121,9 @@ export default function CoursePlayer({ course }: { course: Course }) {
     const poll = async () => {
       if (!alive) return;
       try {
-        const c = await (await fetch(`/api/courses/${course.id}`)).json();
+        const c = await (
+          await fetch(`/api/courses/${course.id}`, { cache: "no-store" })
+        ).json();
         if (!alive || !c?.id) return;
         setCourseState(c);
         if ((c.pendingChapters ?? 0) > 0 || c.generationError) {
