@@ -16,7 +16,8 @@ export async function POST(req: Request) {
     const referenceDoc =
       typeof body.referenceDoc === "string" ? body.referenceDoc.slice(0, 50_000) : undefined;
     const courseList = Array.isArray(body.courseList) ? body.courseList : undefined;
-    const result = await analyzeChat(messages, { referenceDoc, courseList });
+    const profile = body.profile && typeof body.profile === "object" ? body.profile : undefined;
+    const result = await analyzeChat(messages, { referenceDoc, courseList, profile });
     return NextResponse.json(result);
   } catch (e) {
     const message = e instanceof Error ? e.message : "需求分析失败";

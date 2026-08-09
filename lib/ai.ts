@@ -25,6 +25,8 @@ export interface GenerateInput {
   referenceCourse?: string;
   /** 对话阶段 AI 选定的技术栈(来自技术栈库,大纲必须围绕它设计) */
   techStack?: TechStackEntry;
+  /** 学习者画像(聊天中收集):时间/经验/平台/偏好,驱动个性化设计 */
+  profile?: LearnerProfile;
 }
 
 const SYSTEM_PROMPT = `你是课程设计专家,擅长设计 freeCodeCamp 风格的循序渐进编程课程。`;
@@ -485,9 +487,14 @@ export async function generateOutline(input: GenerateInput): Promise<CourseOutli
     input.techStack && input.techStack.id
       ? `\n\n已选定技术栈(必须严格围绕它设计整门课程,语言、示例、项目主线均以它为准):\n"""\n栈名:${input.techStack.name}\n语言:${input.techStack.languages.join("、")}\n能干什么:${input.techStack.description}\n典型课程主线(项目式):${input.techStack.typicalProjects.join(" / ")}\n难度定位:${input.techStack.difficulty}\n"""\n大纲的 language 字段必须写该栈的主语言,项目主线优先贴近上述典型示例,难度与该栈的难度定位一致`
       : "";
+  const profile = input.profile ? profileText(input.profile) : "";
+  const profileGuide =
+    profile && profile !== "(尚未收集)"
+      ? `\n\n学习者画像(必须据此个性化设计):\n"""\n${profile}\n"""\n个性化要求:每天时间少 → 章节数精简、每章学习量小、项目任务切碎;经验零基础 → 每步拆细、多手把手示例;有基础 → 略过基础概念、直接进实战;平台为 Windows/macOS → 环境配置与命令按该平台写(如 Windows 用 PowerShell、路径用反斜杠说明);学习偏好动手项目 → 每章都有可运行的练习/挑战`
+      : "";
   const userPrompt = `${systemContext()}\n\n请设计课程大纲。\n主题:${input.topic}\n难度:${input.level}${
     input.goal ? `\n学习目标:${input.goal}` : ""
-  }${input.description ? `\n补充说明:${input.description}` : ""}${stack}${
+  }${input.description ? `\n补充说明:${input.description}` : ""}${stack}${profileGuide}${
     refDoc
       ? `\n\n参考文档(课程内容必须取材于此,术语/示例/工作流保持一致):\n"""\n${refDoc}\n"""`
       : ""
@@ -972,9 +979,43 @@ export interface ChatTurn {
   content: string;
 }
 
+/** 学习者画像:聊天中逐步收集,驱动个性化适配(字段值均为自然短句) */
+export interface LearnerProfile {
+  timePerDay?: string;
+  experience?: string;
+  platform?: string;
+  learningStyle?: string;
+}
+
+export const PROFILE_FIELDS = ["timePerDay", "experience", "platform", "learningStyle"] as const;
+
+/** 白名单清洗画像字段(防止 AI 输出任意字段或超长文本) */
+function cleanProfile(raw: unknown): LearnerProfile {
+  if (!raw || typeof raw !== "object") return {};
+  const p: LearnerProfile = {};
+  for (const k of PROFILE_FIELDS) {
+    const v = (raw as Record<string, unknown>)[k];
+    if (typeof v === "string" && v.trim()) p[k] = v.trim().slice(0, 60);
+  }
+  return p;
+}
+
+/** 画像简述(供 prompt 使用) */
+function profileText(p: LearnerProfile | undefined): string {
+  if (!p) return "(尚未收集)";
+  const parts: string[] = [];
+  if (p.experience) parts.push(`编程经验:${p.experience}`);
+  if (p.timePerDay) parts.push(`每天可投入:${p.timePerDay}`);
+  if (p.platform) parts.push(`平台:${p.platform}`);
+  if (p.learningStyle) parts.push(`学习偏好:${p.learningStyle}`);
+  return parts.length > 0 ? parts.join("; ") : "(尚未收集)";
+}
+
 export interface AnalyzeOptions {
   referenceDoc?: string;
   courseList?: { id: string; title: string }[];
+  /** 聊天中已收集的学习者画像(多轮累积),供 AI 判断还缺什么 */
+  profile?: LearnerProfile;
 }
 
 export interface AnalyzeResult {
@@ -992,9 +1033,11 @@ export interface AnalyzeResult {
   /** 主选技术栈的完整条目(服务端从库中查出,供客户端展示与大纲生成) */
   techStackEntry: TechStackEntry | null;
   refCourseId: string;
+  /** 本轮从对话中提取/推断的画像增量(客户端合并累积) */
+  profile: LearnerProfile;
 }
 
-const ANALYZE_TASK = `你是课程需求分析助手,用户通过对话描述想学的编程课程。根据对话历史判断下一步,输出严格 JSON(不要任何多余文字,不要 markdown 代码块):
+const ANALYZE_TASK = `你是课程需求分析助手,用户通过对话描述想学的编程课程。你不仅要判断下一步动作,还要主动收集「学习者画像」,让课程设计贴合每个人的时间、经验、平台与偏好。根据对话历史判断下一步,输出严格 JSON(不要任何多余文字,不要 markdown 代码块):
 {
   "action": "ask" | "outline" | "reject",
   "reason": "一句话说明(中文)",
@@ -1006,7 +1049,13 @@ const ANALYZE_TASK = `你是课程需求分析助手,用户通过对话描述想
   "extra": "补充约束:技术栈偏好、内容侧重、参考课程等(没有则空)",
   "techStack": ["AI 选定的技术栈:语言/框架/工具,2-4 项(说明用,最终以 techStackIds 为准)"],
   "techStackIds": ["从下方技术栈目录中选出的最匹配栈 id,1-3 个,按匹配度从高到低;必须严格使用目录中存在的 id"],
-  "refCourseId": "用户想参考的已有课程 id(从提供的课程列表中匹配;没有则空)"
+  "refCourseId": "用户想参考的已有课程 id(从提供的课程列表中匹配;没有则空)",
+  "profile": {
+    "timePerDay": "用户每天能投入的学习时间(如「每天 1 小时」;没有就空)",
+    "experience": "编程经验(零基础/有基础/经验丰富,细分如「会 Python 基础」;没有就空)",
+    "platform": "用户使用的操作系统(Windows/macOS/Linux;没有就空)",
+    "learningStyle": "学习偏好(如 动手做项目/看视频/读文档;没有就空)"
+  }
 }
 
 技术栈目录(每行:id | 名称 | 标签 | 难度 | 能干什么):
@@ -1020,11 +1069,19 @@ ${techStackCatalog()}
 5. 目录中找不到合适的栈时:选最接近的 1 个,并在 techStack 里补充说明缺什么;绝不要编造目录外的 id
 6. techStackIds 与 techStack 要保持一致(techStack 用中文名描述)
 
+画像收集规则(个性化适配的核心):
+1. 从对话中提取用户关于「时间投入/编程经验/平台/学习偏好」的信息填进 profile;用户已明确说过的字段原样保留
+2. 已有画像(请求中提供)的字段不要重复问;只补缺的
+3. 追问优先级:编程经验 > 每日时间 > 平台 > 学习偏好;一次只问一个,给 2-3 个快捷选项;问完一轮后在下一轮根据回答决定是否继续问或出大纲
+4. 用户的初始消息已说清「想学什么 + 水平 + 时间」时不要追问,直接 outline
+5. 选栈与画像联动:零基础 + 时间少 → 选「入门友好」+ 章节少而精的栈;经验丰富 → 可选「生产级」;平台必须与所选栈的 environment 兼容(Windows 用户避 linux/macos 专属栈)
+6. 画像字段没收集全不阻塞:至少知道「经验」或「时间」其一,且主题明确,就可以出大纲
+
 其他规则:
 1. 主题把关:主题与编程/技术学习无关(如烹饪、健身、音乐)时 action=reject,reason 说明;无法确定时偏向通过
 2. 只有真正缺关键信息(学什么不明确、或水平完全无法判断)才 action=ask,一次只问一个最关键的问题,并给出 2-3 个快捷回复选项;能推断就推断,不要连珠炮提问
 3. 信息足够时 action=outline,并按上面的选栈规则替用户决策
-4. level 推断:从未写过代码=beginner,有基础但换新领域=intermediate,专业开发者或明确要求=advanced;推断不出时给 beginner
+4. level 推断:从未写过代码=beginner,有基础但换新领域=intermediate,专业开发者或明确要求=advanced;推断不出时给 beginner;与 profile.experience 一致
 5. goal 用一句话总结用户想要的成果;extra 记录其余约束;用户没提的字段留空,不要编造
 6. 用户提到「参考我学过的《课程名》」时,从课程列表中匹配最近似的 id 填入 refCourseId,匹配不到就留空
 7. 对话可能很长,最后一条用户消息最重要,但也要参考之前的澄清
@@ -1045,7 +1102,9 @@ export async function analyzeChat(
   const history = turns
     .map((t) => `${t.role === "user" ? "用户" : "助手"}: ${t.content}`)
     .join("\n");
-  const userPrompt = `${systemContext()}\n\n${ANALYZE_TASK}\n课程列表:\n${courseList}\n\n${history}`;
+  const userPrompt = `${systemContext()}\n\n${ANALYZE_TASK}\n已收集的学习者画像:${profileText(
+    opts.profile
+  )}\n课程列表:\n${courseList}\n\n${history}`;
   const content = await chat(userPrompt, true);
   const raw = parseJSON(content);
   const action = ["ask", "outline", "reject"].includes(String(raw.action))
@@ -1079,6 +1138,7 @@ export async function analyzeChat(
     techStackIds,
     techStackEntry,
     refCourseId: String(raw.refCourseId ?? "").slice(0, 64),
+    profile: cleanProfile(raw.profile),
   };
 }
 

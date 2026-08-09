@@ -6,6 +6,14 @@ export interface ChatTurn {
   content: string;
 }
 
+/** 学习者画像:聊天中逐步收集,驱动个性化适配 */
+export interface LearnerProfile {
+  timePerDay?: string;
+  experience?: string;
+  platform?: string;
+  learningStyle?: string;
+}
+
 export interface AnalyzeResult {
   action: "ask" | "outline" | "reject";
   reason: string;
@@ -19,11 +27,17 @@ export interface AnalyzeResult {
   techStackIds: string[];
   techStackEntry: TechStackEntry | null;
   refCourseId: string;
+  /** 本轮从对话中提取/推断的画像增量(客户端合并累积) */
+  profile: LearnerProfile;
 }
 
 export async function analyzeChat(
   messages: ChatTurn[],
-  opts: { referenceDoc?: string; courseList?: { id: string; title: string }[] } = {}
+  opts: {
+    referenceDoc?: string;
+    courseList?: { id: string; title: string }[];
+    profile?: LearnerProfile;
+  } = {}
 ): Promise<AnalyzeResult> {
   const res = await fetch("/api/ai/chat/analyze", {
     method: "POST",
@@ -32,6 +46,7 @@ export async function analyzeChat(
       messages,
       referenceDoc: opts.referenceDoc,
       courseList: opts.courseList,
+      profile: opts.profile,
     }),
   });
   const data = await res.json().catch(() => null);

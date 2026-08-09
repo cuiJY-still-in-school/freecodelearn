@@ -9,6 +9,7 @@ import {
   reviseChat,
   type AnalyzeResult,
   type ChatTurn,
+  type LearnerProfile,
 } from "@/lib/chat";
 
 type ChatMessageInput =
@@ -40,6 +41,7 @@ interface Snapshot {
   messages: ChatMessage[];
   refDoc: { name: string; text: string } | null;
   researchNote: string;
+  profile: LearnerProfile;
 }
 
 export default function ChatGenerator({ courseList, onCourseCreated }: ChatGeneratorProps) {
@@ -80,6 +82,7 @@ export default function ChatGenerator({ courseList, onCourseCreated }: ChatGener
   const [refDocError, setRefDocError] = useState("");
   const [sessionError, setSessionError] = useState("");
   const [researchNote, setResearchNote] = useState(() => snap?.researchNote ?? "");
+  const [profile, setProfile] = useState<LearnerProfile>(() => snap?.profile ?? {});
 
   const statusIdRef = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -119,13 +122,14 @@ export default function ChatGenerator({ courseList, onCourseCreated }: ChatGener
       messages,
       refDoc,
       researchNote,
+      profile,
     };
     try {
       sessionStorage.setItem(SNAP_KEY, JSON.stringify(snapNow));
     } catch {
       // 快照过大等写入失败:不阻塞
     }
-  }, [messages, refDoc, researchNote]);
+  }, [messages, refDoc, researchNote, profile]);
 
   // ---------- 滚动到底 ----------
 
@@ -243,6 +247,7 @@ export default function ChatGenerator({ courseList, onCourseCreated }: ChatGener
         referenceDoc: refDoc?.text,
         referenceCourse: refCourseSummary || undefined,
         techStackId: r.techStackIds[0] || undefined,
+        profile,
       }),
     });
     const data = await res.json();
@@ -277,7 +282,12 @@ export default function ChatGenerator({ courseList, onCourseCreated }: ChatGener
         const r = await analyzeChat(turns, {
           referenceDoc: refDoc?.text,
           courseList,
+          profile,
         });
+        // 合并本轮画像增量(用户回答的字段),供下一轮与大纲使用
+        if (r.profile && Object.keys(r.profile).length > 0) {
+          setProfile((p) => ({ ...p, ...r.profile }));
+        }
         if (r.action === "reject") {
           setStatus(r.reason || "该主题与编程学习无关", "error");
           setChips(["仍要生成"]);
@@ -317,6 +327,7 @@ export default function ChatGenerator({ courseList, onCourseCreated }: ChatGener
         techStackIds: [],
         techStackEntry: null,
         refCourseId: "",
+        profile: {},
       });
     } catch (err) {
       setSessionError(err instanceof Error ? err.message : "出错了,请重试");
