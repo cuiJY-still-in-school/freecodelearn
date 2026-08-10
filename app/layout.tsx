@@ -43,6 +43,12 @@ export default function RootLayout({
             __html: `try{var t=localStorage.getItem("fcl-theme")||"system";var d=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.setAttribute("data-theme",d?"dark":"light")}catch(e){document.documentElement.setAttribute("data-theme","light")}`,
           }}
         />
+        {/* 首帧前应用排版偏好(字体/字号/阅读宽度) */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var p=JSON.parse(localStorage.getItem("fcl-typography")||"{}");var h=document.documentElement;h.setAttribute("data-font",p.font==="serif"||p.font==="mono"?p.font:"default");h.setAttribute("data-size",p.size==="small"||p.size==="large"?p.size:"default");h.setAttribute("data-width",p.width==="narrow"||p.width==="wide"?p.width:"default")}catch(e){}`,
+          }}
+        />
       </head>
       <body className="min-h-full flex flex-col bg-bg text-ink">
         <ThemeInit />

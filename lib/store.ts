@@ -91,6 +91,16 @@ export async function deleteCourse(id: string): Promise<void> {
   await fs.rm(path.join(COURSES_DIR, `${safeId(id)}.json`), { force: true });
 }
 
+export async function renameCourse(id: string, title: string): Promise<Course | null> {
+  const course = await getCourse(id);
+  if (!course) return null;
+  const clean = title.trim().slice(0, 80);
+  if (!clean || clean === course.title) return course;
+  course.title = clean;
+  await saveCourse(course);
+  return course;
+}
+
 export function newCourseId(): string {
   return randomUUID();
 }

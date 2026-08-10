@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getTheme, setTheme, type Theme } from "@/lib/theme";
 import {
+  getTypography,
+  setTypography,
+  type TypographyPref,
+  DEFAULT_TYPOGRAPHY,
+} from "@/lib/typography";
+import {
   FALLBACK_PROVIDERS,
   fetchModelsDirectory,
   type ProviderInfo,
@@ -92,6 +98,7 @@ function SearchDropdown({
 
 export default function SettingsPage() {
   const [theme, setThemeState] = useState<Theme>("system");
+  const [typo, setTypoState] = useState<TypographyPref>(DEFAULT_TYPOGRAPHY);
   const [provider, setProvider] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -101,6 +108,8 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // 自动进入下一步(独立于服务配置,localStorage 持久化)
+  const [autoAdvance, setAutoAdvance] = useState(true);
 
   // 服务商目录(models.dev 实时数据,失败降级内置预设)
   const [presets, setPresets] = useState<ProviderInfo[] | null>(null);
@@ -120,7 +129,16 @@ export default function SettingsPage() {
   }>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 一次性从本地存储/服务端初始化,非级联更新
     setThemeState(getTheme());
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 一次性从本地存储初始化
+    setTypoState(getTypography());
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 一次性从本地存储初始化
+      setAutoAdvance(localStorage.getItem("fcl-auto-advance") !== "off");
+    } catch {
+      // 忽略存储异常
+    }
     fetch("/api/settings")
       .then((r) => r.json())
       .then((d) => {
@@ -276,6 +294,92 @@ export default function SettingsPage() {
               {label}
             </button>
           ))}
+        </div>
+        <label className="mb-1.5 block text-sm font-medium text-ink">
+          阅读排版
+        </label>
+        <div className="mb-6 space-y-3 rounded-xl border border-line bg-bg-subtle/50 p-4">
+          <div>
+            <p className="mb-1.5 text-xs text-ink-soft">课程正文字体</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                ["default", "默认"],
+                ["serif", "衬线"],
+                ["mono", "等宽"],
+              ] as const).map(([v, label]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => {
+                    const next = { ...typo, font: v };
+                    setTypoState(next);
+                    setTypography(next);
+                  }}
+                  className={`rounded-xl border px-3 py-2 text-sm transition ${
+                    typo.font === v
+                      ? "border-accent bg-accent-soft font-semibold text-accent"
+                      : "border-line bg-bg text-ink-soft hover:border-accent/40 hover:text-ink"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-1.5 text-xs text-ink-soft">全局字号</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                ["small", "小"],
+                ["default", "默认"],
+                ["large", "大"],
+              ] as const).map(([v, label]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => {
+                    const next = { ...typo, size: v };
+                    setTypoState(next);
+                    setTypography(next);
+                  }}
+                  className={`rounded-xl border px-3 py-2 text-sm transition ${
+                    typo.size === v
+                      ? "border-accent bg-accent-soft font-semibold text-accent"
+                      : "border-line bg-bg text-ink-soft hover:border-accent/40 hover:text-ink"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-1.5 text-xs text-ink-soft">课程阅读宽度</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                ["narrow", "窄"],
+                ["default", "默认"],
+                ["wide", "宽"],
+              ] as const).map(([v, label]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => {
+                    const next = { ...typo, width: v };
+                    setTypoState(next);
+                    setTypography(next);
+                  }}
+                  className={`rounded-xl border px-3 py-2 text-sm transition ${
+                    typo.width === v
+                      ? "border-accent bg-accent-soft font-semibold text-accent"
+                      : "border-line bg-bg text-ink-soft hover:border-accent/40 hover:text-ink"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         <label className="mb-1.5 block text-sm font-medium text-ink">
           服务商名称(Provider)
@@ -434,6 +538,38 @@ export default function SettingsPage() {
           className="mb-6 w-full rounded-xl border border-line bg-bg px-4 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
 
         />
+
+        <div className="mb-6 flex items-center justify-between rounded-xl border border-line bg-bg-subtle/50 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-ink">自动进入下一步</p>
+            <p className="text-xs text-ink-soft">
+              完成后自动跳转下一项/下一章;关闭后横幅停留,手动点击进入
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoAdvance}
+            onClick={() => {
+              const next = !autoAdvance;
+              setAutoAdvance(next);
+              try {
+                localStorage.setItem("fcl-auto-advance", next ? "on" : "off");
+              } catch {
+                // 忽略存储异常
+              }
+            }}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+              autoAdvance ? "bg-accent" : "bg-line"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                autoAdvance ? "left-[22px]" : "left-0.5"
+              }`}
+            />
+          </button>
+        </div>
 
         {error && (
           <div className="mb-4 rounded-xl border border-red/20 bg-red-soft px-4 py-3 text-sm text-red">

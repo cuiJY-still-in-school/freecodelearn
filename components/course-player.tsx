@@ -188,10 +188,19 @@ export default function CoursePlayer({ course }: { course: Course }) {
     []
   );
 
+  // 自动跳转开关:设置页「自动进入下一步」关闭后,横幅只展示不自动跳(手动点击)
+  const autoAdvance = () => {
+    try {
+      return localStorage.getItem("fcl-auto-advance") !== "off";
+    } catch {
+      return true;
+    }
+  };
+
   // 章节横幅自动跳转:下一章已生成 → 2.5s 后进入;尚未生成 → 等轮询刷新后就绪再跳
   // 终端类挑战不自动跳(等用户看完终端输出),仅显示横幅
   useEffect(() => {
-    if (!chapterFlash) return;
+    if (!chapterFlash || !autoAdvance()) return;
     const nextCh = courseState.chapters[chapterFlash.chapterIndex];
     const firstOfNext = nextCh?.steps[0];
     if (!firstOfNext || flashTimerRef.current) return;
@@ -205,7 +214,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
 
   // 兜底:用户完成最后已生成步骤后刷新页面(章节横幅丢失),下一章生成就绪后自动进入
   useEffect(() => {
-    if (pending <= 0 || flashTimerRef.current) return;
+    if (pending <= 0 || flashTimerRef.current || !autoAdvance()) return;
     if (!currentId || !progress[currentId]) return;
     if (nextStepId(courseState, currentId)) return;
     const lastFlat = flat[flat.length - 1];
@@ -391,6 +400,7 @@ export default function CoursePlayer({ course }: { course: Course }) {
     // 命令行/终端类挑战:不自动跳转,等用户看完终端输出、点「进入下一步」再走
     const lang = step?.language ?? "";
     if (/shell|git|bash|zsh|powershell|cmd|命令行|终端|命令/i.test(lang)) return;
+    if (!autoAdvance()) return;
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     flashTimerRef.current = setTimeout(() => {
       setPassedFlash(false);
@@ -476,6 +486,35 @@ export default function CoursePlayer({ course }: { course: Course }) {
                 style={{ width: `${pct}%` }}
               />
             </div>
+            {(() => {
+              const ci = courseState.chapters.findIndex((c) =>
+                c.steps.some((s) => s.id === currentId)
+              );
+              const prevCh = ci > 0 ? courseState.chapters[ci - 1]?.steps[0] : null;
+              const nextCh =
+                ci >= 0 && ci < courseState.chapters.length - 1
+                  ? courseState.chapters[ci + 1]?.steps[0]
+                  : null;
+              if (!prevCh && !nextCh) return null;
+              return (
+                <div className="hidden shrink-0 items-center gap-1 sm:flex">
+                  {prevCh && (
+                    <button
+                      onClick={() => goTo(prevCh.id)}
+                      className="rounded-lg border border-line px-2.5 py-1 text-xs text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
+                      title="上一章"
+                    >← 上一章</button>
+                  )}
+                  {nextCh && (
+                    <button
+                      onClick={() => goTo(nextCh.id)}
+                      className="rounded-lg border border-line px-2.5 py-1 text-xs text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
+                      title="下一章"
+                    >下一章 →</button>
+                  )}
+                </div>
+              );
+            })()}
             {reviewItems.length > 0 && (
               <button
                 onClick={() => setReviewMode(true)}
@@ -508,12 +547,20 @@ export default function CoursePlayer({ course }: { course: Course }) {
               <p className="mt-1 text-sm text-green/80">
                 你已完成《{course.title}》全部 {total} 个步骤,干得漂亮
               </p>
-              <Link
-                href="/"
-                className="mt-4 inline-block rounded-xl bg-green px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                回到课程列表
-              </Link>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                <Link
+                  href="/"
+                  className="rounded-xl bg-green px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                >
+                  回到课程列表
+                </Link>
+                <button
+                  onClick={clearAllProgress}
+                  className="rounded-xl border border-green/40 px-5 py-2 text-sm font-medium text-green transition hover:bg-green-soft"
+                >
+                  重新学习本课程
+                </button>
+              </div>
             </div>
           )}
 
@@ -804,8 +851,20 @@ export default function CoursePlayer({ course }: { course: Course }) {
                   });
                   const data = await res.json();
                   if (!res.ok) throw new Error(data.error ?? "追加失败");
-                  setAppendMsg("章节已追加,刷新中...");
-                  window.location.reload();
+                  // 无刷新更新:拉取最新课程数据并进入新章节第一步骤
+                  const fresh = await (
+                    await fetch(`/api/courses/${course.id}`, { cache: "no-store" })
+                  ).json();
+                  if (fresh?.id) {
+                    setCourseState(fresh);
+                    setAppendTitle("");
+                    setAppendMsg("");
+                    const newCh = fresh.chapters[fresh.chapters.length - 1];
+                    if (newCh?.steps[0]) goTo(newCh.steps[0].id);
+                    else setAppendMsg("章节已追加,刷新页面后可查看");
+                  } else {
+                    setAppendMsg("章节已追加,刷新页面后可查看");
+                  }
                 } catch (err) {
                   setAppendMsg(err instanceof Error ? err.message : "追加失败");
                 } finally {

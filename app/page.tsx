@@ -40,6 +40,11 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   // 课程列表搜索
   const [courseQuery, setCourseQuery] = useState("");
+  // 筛选:语言 / 难度
+  const [langFilter, setLangFilter] = useState("all");
+  const [levelFilter, setLevelFilter] = useState("all");
+  // 排序方式:newest | progress | title
+  const [courseSort, setCourseSort] = useState("newest");
 
   // 提示
   const [notice, setNotice] = useState("");
@@ -127,6 +132,31 @@ export default function HomePage() {
       await refreshCourses();
     } catch {
       setNotice("删除失败,请重试");
+    }
+  }
+
+  async function renameCourse(id: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const c = courses.find((x) => x.id === id);
+    if (!c) return;
+    const title = prompt("重命名课程:", c.title);
+    if (title === null) return;
+    if (!title.trim()) {
+      setNotice("课程名不能为空");
+      return;
+    }
+    try {
+      const res = await fetch("/api/courses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, title }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await refreshCourses();
+      setNotice("已重命名");
+    } catch {
+      setNotice("重命名失败,请重试");
     }
   }
 
@@ -286,8 +316,15 @@ export default function HomePage() {
 
       {/* 课程列表 */}
       <section className="mt-16">
-        {/* 排序:进行中/未开始在前,已完成置后,同组内按创建时间倒序 */}
         {(() => {
+          const languages = Array.from(
+            new Set(courses.map((c) => c.language || "").filter(Boolean))
+          ).sort((a, b) => a.localeCompare(b, "zh"));
+          const LEVELS: { key: string; label: string }[] = [
+            { key: "beginner", label: "入门" },
+            { key: "intermediate", label: "进阶" },
+            { key: "advanced", label: "高级" },
+          ];
           const courseRows = courses
             .map((c) => ({
               c,
@@ -295,15 +332,23 @@ export default function HomePage() {
             }))
             .filter(({ c }) => {
               const q = courseQuery.trim().toLowerCase();
-              if (!q) return true;
-              return (
-                c.title.toLowerCase().includes(q) ||
-                (c.language ?? "").toLowerCase().includes(q)
-              );
+              if (q && !(c.title.toLowerCase().includes(q) || (c.language ?? "").toLowerCase().includes(q))) return false;
+              if (langFilter !== "all" && (c.language || "") !== langFilter) return false;
+              if (levelFilter !== "all" && (c.level || "") !== levelFilter) return false;
+              return true;
             })
             .sort((x, y) => {
-              const xDone = x.c.pendingChapters === 0 && x.c.stepCount > 0 && x.done >= x.c.stepCount ? 1 : 0;
-              const yDone = y.c.pendingChapters === 0 && y.c.stepCount > 0 && y.done >= y.c.stepCount ? 1 : 0;
+              const doneOf = (r: { c: CourseMeta; done: number }) =>
+                r.c.pendingChapters === 0 && r.c.stepCount > 0 && r.done >= r.c.stepCount ? 1 : 0;
+              if (courseSort === "title") return x.c.title.localeCompare(y.c.title, "zh");
+              if (courseSort === "progress") {
+                const xDone = doneOf(x), yDone = doneOf(y);
+                if (xDone !== yDone) return xDone - yDone;
+                const xPct = x.c.stepCount ? x.done / x.c.stepCount : 0;
+                const yPct = y.c.stepCount ? y.done / y.c.stepCount : 0;
+                return yPct - xPct;
+              }
+              const xDone = doneOf(x), yDone = doneOf(y);
               if (xDone !== yDone) return xDone - yDone;
               return y.c.createdAt.localeCompare(x.c.createdAt);
             });
@@ -311,15 +356,49 @@ export default function HomePage() {
         <>
         <div className="mb-5 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-serif text-2xl font-bold">课程列表</h2>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             {courses.length > 0 && (
+              <>
               <input
                 value={courseQuery}
                 onChange={(e) => setCourseQuery(e.target.value)}
                 placeholder="搜索课程 / 语言..."
                 aria-label="搜索课程"
-                className="w-44 rounded-lg border border-line bg-card px-3 py-1.5 text-xs outline-none transition focus:border-accent"
+                className="w-36 rounded-lg border border-line bg-card px-3 py-1.5 text-xs outline-none transition focus:border-accent"
               />
+              <select
+                value={langFilter}
+                onChange={(e) => setLangFilter(e.target.value)}
+                aria-label="按语言筛选"
+                className="rounded-lg border border-line bg-card px-2 py-1.5 text-xs outline-none transition focus:border-accent"
+              >
+                <option value="all">全部语言</option>
+                {languages.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+              <select
+                value={levelFilter}
+                onChange={(e) => setLevelFilter(e.target.value)}
+                aria-label="按难度筛选"
+                className="rounded-lg border border-line bg-card px-2 py-1.5 text-xs outline-none transition focus:border-accent"
+              >
+                <option value="all">全部难度</option>
+                {LEVELS.map((l) => (
+                  <option key={l.key} value={l.key}>{l.label}</option>
+                ))}
+              </select>
+              <select
+                value={courseSort}
+                onChange={(e) => setCourseSort(e.target.value)}
+                aria-label="排序方式"
+                className="rounded-lg border border-line bg-card px-2 py-1.5 text-xs outline-none transition focus:border-accent"
+              >
+                <option value="newest">最新创建</option>
+                <option value="progress">学习进度</option>
+                <option value="title">名称排序</option>
+              </select>
+              </>
             )}
             {!loading && courses.length > 0 && (
               <span className="text-xs text-ink-soft">
@@ -423,6 +502,15 @@ export default function HomePage() {
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={(e) => renameCourse(c.id, e)}
+                    className="rounded-lg p-1.5 text-ink-soft transition hover:bg-bg-subtle hover:text-ink"
+                    title="重命名课程"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                     </svg>
                   </button>
                   <button

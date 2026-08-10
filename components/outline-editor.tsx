@@ -48,6 +48,57 @@ export default function OutlineEditor({ draft }: { draft: OutlineDraft }) {
     setSel((s) => Math.min(s, next.chapters.length - 1));
     saveDraft({ ...draft, outline: next });
   };
+  const addChapter = () => {
+    const next = {
+      ...outline,
+      chapters: [
+        ...outline.chapters,
+        { title: `第 ${outline.chapters.length + 1} 章`, description: "", steps: [{ title: "新步骤", type: "lesson" as const, brief: "" }] },
+      ],
+    };
+    setOutline(next);
+    setSel(next.chapters.length - 1);
+    saveDraft({ ...draft, outline: next });
+  };
+
+  const patchStep = (si: number, p: Partial<CourseOutline["chapters"][number]["steps"][number]>) => {
+    const next = {
+      ...outline,
+      chapters: outline.chapters.map((c, i) =>
+        i === sel ? { ...c, steps: c.steps.map((s, j) => (j === si ? { ...s, ...p } : s)) } : c
+      ),
+    };
+    setOutline(next);
+    saveDraft({ ...draft, outline: next });
+  };
+  const moveStep = (si: number, dir: -1 | 1) => {
+    const steps = outline.chapters[sel]?.steps ?? [];
+    const j = si + dir;
+    if (j < 0 || j >= steps.length) return;
+    const next = [...steps];
+    [next[si], next[j]] = [next[j], next[si]];
+    patchSteps(next);
+  };
+  const removeStep = (si: number) => {
+    const steps = outline.chapters[sel]?.steps ?? [];
+    if (steps.length <= 1) return;
+    patchSteps(steps.filter((_, j) => j !== si));
+  };
+  const addStep = () => {
+    const steps = outline.chapters[sel]?.steps ?? [];
+    patchSteps([
+      ...steps,
+      { title: `新步骤 ${steps.length + 1}`, type: "lesson", brief: "" },
+    ]);
+  };
+  const patchSteps = (steps: CourseOutline["chapters"][number]["steps"]) => {
+    const next = {
+      ...outline,
+      chapters: outline.chapters.map((c, i) => (i === sel ? { ...c, steps } : c)),
+    };
+    setOutline(next);
+    saveDraft({ ...draft, outline: next });
+  };
 
   const confirm = async () => {
     if (busy === "generating") return;
@@ -136,6 +187,14 @@ export default function OutlineEditor({ draft }: { draft: OutlineDraft }) {
               </span>
             </button>
           ))}
+          <button
+            onClick={addChapter}
+            disabled={busy === "generating"}
+            className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-line px-3 py-2.5 text-sm text-ink-soft transition hover:border-accent/50 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg border border-dashed border-line text-xs">+</span>
+            新增章节
+          </button>
         </nav>
       </aside>
 
@@ -195,18 +254,61 @@ export default function OutlineEditor({ draft }: { draft: OutlineDraft }) {
               </div>
               <ul className="divide-y divide-line/60">
                 {ch.steps.map((s, si) => (
-                  <li key={si} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                  <li key={si} className="flex items-center gap-2.5 px-4 py-2.5 text-sm">
                     <span className="font-mono text-[11px] text-ink-soft">{si + 1}</span>
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] font-bold bg-bg-subtle">
                       {STEP_ICON[s.type] ?? "•"}
                     </span>
-                    <span className="truncate text-ink">{s.title}</span>
-                    <span className="ml-auto shrink-0 rounded-full border border-line px-2 py-0.5 text-[10px] text-ink-soft">
-                      {s.type === "lesson" ? "讲解" : s.type === "challenge" ? "代码挑战" : "测验"}
-                    </span>
+                    <input
+                      value={s.title}
+                      onChange={(e) => patchStep(si, { title: e.target.value })}
+                      disabled={busy === "generating"}
+                      aria-label={`步骤 ${si + 1} 标题`}
+                      className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1 text-ink outline-none transition focus:border-accent/60 focus:bg-card disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                    <select
+                      value={s.type}
+                      onChange={(e) =>
+                        patchStep(si, { type: e.target.value as typeof s.type })
+                      }
+                      disabled={busy === "generating"}
+                      aria-label="步骤类型"
+                      className="shrink-0 rounded-lg border border-line bg-card px-2 py-1 text-xs text-ink-soft outline-none transition focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value="lesson">讲解</option>
+                      <option value="challenge">代码挑战</option>
+                      <option value="quiz">测验</option>
+                    </select>
+                    <div className="flex shrink-0 gap-0.5">
+                      <button
+                        onClick={() => moveStep(si, -1)}
+                        disabled={si === 0 || busy === "generating"}
+                        className="rounded-lg px-1.5 py-1 text-xs text-ink-soft transition hover:bg-bg-subtle hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+                        title="上移步骤"
+                      >↑</button>
+                      <button
+                        onClick={() => moveStep(si, 1)}
+                        disabled={si === ch.steps.length - 1 || busy === "generating"}
+                        className="rounded-lg px-1.5 py-1 text-xs text-ink-soft transition hover:bg-bg-subtle hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+                        title="下移步骤"
+                      >↓</button>
+                      <button
+                        onClick={() => removeStep(si)}
+                        disabled={ch.steps.length <= 1 || busy === "generating"}
+                        className="rounded-lg px-1.5 py-1 text-xs text-red/60 transition hover:bg-red-soft hover:text-red disabled:cursor-not-allowed disabled:opacity-30"
+                        title="删除步骤"
+                      >✕</button>
+                    </div>
                   </li>
                 ))}
               </ul>
+              <button
+                onClick={addStep}
+                disabled={busy === "generating"}
+                className="m-3 w-[calc(100%-1.5rem)] rounded-xl border border-dashed border-line py-2 text-xs text-ink-soft transition hover:border-accent/50 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                + 添加步骤
+              </button>
             </div>
           </>
         )}

@@ -9,6 +9,26 @@ import {
   sanitizeEditableMarks,
 } from "@/lib/types";
 
+/** 跟随 html[data-theme] 的暗色状态(MutationObserver,任何方式切换主题都生效) */
+function useIsDark(): boolean {
+  const [dark, setDark] = useState(() => {
+    try {
+      return document.documentElement.getAttribute("data-theme") === "dark";
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    const html = document.documentElement;
+    const sync = () => setDark(html.getAttribute("data-theme") === "dark");
+    const mo = new MutationObserver(sync);
+    mo.observe(html, { attributes: true, attributeFilter: ["data-theme"] });
+    sync();
+    return () => mo.disconnect();
+  }, []);
+  return dark;
+}
+
 export interface TestResult {
   passed: string[];
   failed: { name: string; error: string }[];
@@ -89,6 +109,7 @@ export default function ChallengeRunner({
   persistKey,
   onPassed,
 }: Props) {
+  const isDark = useIsDark();
   const initial = !seedBefore && !seedAfter
     ? (starterCode ?? "")
     : `${seedBefore ?? ""}\n--fcc-editable-region--\n${starterCode ?? ""}\n--fcc-editable-region--\n${seedAfter ?? ""}`;
@@ -404,7 +425,7 @@ ${HARNESS_SUFFIX}
           }
         }}
         height="260px"
-        theme="dark"
+        theme={isDark ? "dark" : "light"}
         extensions={isCSS ? [css()] : isJS ? [javascript()] : []}
         basicSetup={{ autocompletion: false }}
         className="text-sm"

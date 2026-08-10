@@ -10,8 +10,86 @@ export interface ProviderInfo {
   models: string[];
 }
 
-// 兜底:models.dev 不可达时无内置服务商,仅保留 Custom 手动填写
-export const FALLBACK_PROVIDERS: ProviderInfo[] = [];
+// 兜底:models.dev 不可达时的内置热门服务商预设(端点稳定,模型仅列常用项)
+export const FALLBACK_PROVIDERS: ProviderInfo[] = [
+  {
+    name: "DeepSeek",
+    baseUrl: "https://api.deepseek.com/v1",
+    defaultModel: "deepseek-chat",
+    modelCount: 2,
+    models: ["deepseek-chat", "deepseek-reasoner"],
+  },
+  {
+    name: "OpenAI",
+    baseUrl: "https://api.openai.com/v1",
+    defaultModel: "gpt-4o-mini",
+    modelCount: 4,
+    models: ["gpt-4o-mini", "gpt-4o", "o3-mini", "gpt-4.1"],
+  },
+  {
+    name: "Moonshot Kimi",
+    baseUrl: "https://api.moonshot.cn/v1",
+    defaultModel: "kimi-k2",
+    modelCount: 3,
+    models: ["kimi-k2", "moonshot-v1-8k", "moonshot-v1-32k"],
+  },
+  {
+    name: "通义千问 DashScope",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    defaultModel: "qwen-plus",
+    modelCount: 3,
+    models: ["qwen-plus", "qwen-turbo", "qwen-max"],
+  },
+  {
+    name: "智谱 GLM",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    defaultModel: "glm-4-flash",
+    modelCount: 3,
+    models: ["glm-4-flash", "glm-4-plus", "glm-4-long"],
+  },
+  {
+    name: "火山方舟(豆包)",
+    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    defaultModel: "doubao-lite",
+    modelCount: 3,
+    models: ["doubao-lite", "doubao-pro", "deepseek-v3"],
+  },
+  {
+    name: "百度千帆",
+    baseUrl: "https://qianfan.baidubce.com/v2",
+    defaultModel: "ernie-4.0-turbo-8k",
+    modelCount: 3,
+    models: ["ernie-4.0-turbo-8k", "ernie-3.5-8k", "ernie-speed-8k"],
+  },
+  {
+    name: "腾讯混元",
+    baseUrl: "https://api.hunyuan.cloud.tencent.com/v1",
+    defaultModel: "hunyuan-lite",
+    modelCount: 2,
+    models: ["hunyuan-lite", "hunyuan-standard"],
+  },
+  {
+    name: "硅基流动 SiliconFlow",
+    baseUrl: "https://api.siliconflow.cn/v1",
+    defaultModel: "deepseek-ai/DeepSeek-V3",
+    modelCount: 3,
+    models: ["deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-R1", "Qwen/Qwen2.5-7B-Instruct"],
+  },
+  {
+    name: "Groq",
+    baseUrl: "https://api.groq.com/openai/v1",
+    defaultModel: "llama-3.3-70b-versatile",
+    modelCount: 3,
+    models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen-qwq-32b"],
+  },
+  {
+    name: "Ollama(本机)",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    defaultModel: "llama3.1",
+    modelCount: 3,
+    models: ["llama3.1", "qwen2.5", "deepseek-r1"],
+  },
+];
 
 // 始终显示的「自定义」预设:点击后清空字段,由用户手动填写端点与模型
 export const CUSTOM_PROVIDER: ProviderInfo = {

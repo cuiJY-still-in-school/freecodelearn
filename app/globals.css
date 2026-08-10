@@ -99,6 +99,22 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ---------- 排版偏好(字体/字号/阅读宽度) ---------- */
+html[data-size="small"] { font-size: 15px; }
+html[data-size="large"] { font-size: 17px; }
+html[data-size="small"] .cm-editor .cm-content { font-size: 12.5px; }
+html[data-size="large"] .cm-editor .cm-content { font-size: 15px; }
+html[data-font="serif"] .prose-course,
+html[data-font="serif"] .prose-course p,
+html[data-font="serif"] .prose-course ul,
+html[data-font="serif"] .prose-course ol { font-family: var(--font-serif); }
+html[data-font="mono"] .prose-course,
+html[data-font="mono"] .prose-course p,
+html[data-font="mono"] .prose-course ul,
+html[data-font="mono"] .prose-course ol { font-family: var(--font-mono); }
+html[data-width="narrow"] .prose-course { max-width: 34rem; }
+html[data-width="wide"] .prose-course { max-width: 54rem; }
+
 ::selection {
   background: var(--accent-soft);
 }
